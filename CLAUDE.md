@@ -15,7 +15,9 @@ shared module in `../_online/`. Read `progress.md` first.
   with two agreeing sources, and keep the count tests passing.
 - **`js/online.js` is a copy** of `../_online/online.js`. Never edit it here; recopy when the shared one changes.
 - **Card text is our own words. Art is our own SVG** (`js/art.js`). No rulebook text, no publisher art.
-- Tests: `node tests/engine.test.js` (29, ~50 s) and `node tests/online.test.mjs` (4).
+- Tests: `node tests/engine.test.js` (29, ~50 s), `node tests/online.test.mjs` (4), `node tests/fx.test.mjs` (13; sounds/effects),
+  plus headless `node tools/fx-check.mjs <local url>` and `node tools/ui-check.mjs <local url>`.
+- **`js/fx.js` is a copy** of `../_fx/fx.js` (sounds/effects library). Never edit it; game events live in `js/sfx.js`.
   `node tools/mutate.js` (~25 min) proves each test can fail.
 - Strength: `node tools/measure-levels.js 400 3,4,5,7 1 --json` (~10 min); put the numbers in `STRENGTH_NOTE`
   in `js/app.js`. Hard's weights come from `node tools/tune.js`. Draft table: `node tools/draft-stats.js 300`

@@ -346,6 +346,27 @@
   .ok { color: var(--good); font-weight: 700; }
   .no { color: var(--bad); font-weight: 700; }
   @media (max-width: 360px) { .card { width: 45px; } .card .nm { font-size: 8.5px; } }
+
+  /* ------------------------------------------------ sound & effects (js/fx.js settings) */
+  .mc.new { animation-delay: var(--land, 0ms); }
+  body.fx-fast .deal, body.fx-fast .popin, body.fx-fast .mc.new { animation-duration: .17s; }
+  body.fx-noanim .deal, body.fx-noanim .popin, body.fx-noanim .mc.new, body.fx-noanim .sheet, body.fx-noanim .sheet-back, body.fx-noanim .toast { animation: none; }
+  #fx-panel .fx-set { margin-top: 4px; }
+  #fx-panel .fx-row { border-top: 0; padding: 0; min-height: 46px; gap: 10px; }
+  #fx-panel .fx-lab { font-weight: 650; }
+  #fx-panel .fx-row.dim { opacity: .45; }
+  #fx-panel .fx-vol { flex: 0 1 160px; min-width: 80px; accent-color: var(--accent); }
+  #fx-panel .fx-test { min-height: 34px; padding: 0 11px; font-size: 13.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-soft); font-weight: 650; cursor: pointer; }
+  #fx-panel .fx-row .seg { flex: none; background: none; border: 0; padding: 0; gap: 6px; }
+  #fx-panel .fx-row .seg button { min-height: 36px; font-size: 13px; padding: 3px 12px; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px; color: var(--text); }
+  #fx-panel .fx-row .seg button[aria-pressed="true"] { background: rgba(110,168,254,.14); border-color: var(--accent); color: var(--accent); }
+  /* the game's own switch look (fx.js brings a green one) */
+  #fx-panel .switch { width: 48px; height: 28px; }
+  #fx-panel .switch span { background: #2f3548; border-radius: 14px; }
+  #fx-panel .switch span::after { width: 22px; height: 22px; }
+  #fx-panel .switch input:checked + span { background: var(--accent); }
+  #fx-panel .switch input:checked + span::after { transform: translateX(20px); }
+  #fx-panel .fx-why { font-size: 12.5px; color: var(--muted); padding: 0 0 8px; }
 </style>
 </head>
 <body>
@@ -370,6 +391,8 @@
 <script src="js/online-game.js?v=1"></script>
 <script src="js/draft-data.js?v=1"></script>
 <script src="js/art.js?v=2"></script>
-<script src="js/app.js?v=2"></script>
+<script src="js/fx.js?v=1"></script>
+<script src="js/sfx.js?v=1"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>

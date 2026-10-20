@@ -83,8 +83,10 @@
     net.snap = snap;
     net.busy = false;
     if (snap.status === 'playing' || snap.status === 'finished') {
-      if (!table || !table.online) { table = new OnlineTable(); resetSel(); net.savedLast = false; ui.dec = []; guard('game'); }
+      if (!table || !table.online) { table = new OnlineTable(); resetSel(); net.savedLast = false; ui.dec = []; guard('game'); ui.fx.prev = Sfx.empty((snap.pub && snap.pub.n) || 0); }
       ME = snap.mySeat >= 0 ? snap.mySeat : 0;
+      // off the Play tab the game still sounds (the screen catches up when you come back)
+      if (ui.tab !== 'play') { try { const v = table.view(); fxRun(fxStep(v, v.waiting.indexOf(ME) >= 0 && !(v.phase === 'pick' && v.pick))); } catch (e) { /* ignore */ } }
       if (snap.status === 'finished' && snap.pub && !net.savedLast) { net.savedLast = true; saveLast(table.view(), ui.dec || []); }
     } else if (table && table.online) backToLocal();
     if (snap.status === 'closed' || snap.status === 'left') {
@@ -102,8 +104,66 @@
   }
 
   // ------------------------------------------------------------------ ui state
-  const ui = { tab: 'play', online: false, sel: -1, pay: 0, hint: null, prevKey: '', prevCities: null, dec: [], oddsTab: 'cards', oddsN: 4, oddsAge: 1, draftSort: 'win', sci: [0, 0, 0, 0], mil: null };
+  const ui = { tab: 'play', online: false, sel: -1, pay: 0, hint: null, prevKey: '', prevCities: null, dec: [], oddsTab: 'cards', oddsN: 4, oddsAge: 1, draftSort: 'win', sci: [0, 0, 0, 0], mil: null,
+    fx: { prev: null, land: 0 } };
   function resetSel() { ui.sel = -1; ui.pay = 0; ui.hint = null; }
+
+  // ------------------------------------------------------------------ sounds + effects (js/fx.js, js/sfx.js)
+  const FX = window.FX, Sfx = window.SWSfx;
+  FX.init({ game: 'seven-wonders' });
+  Sfx.setup(FX);
+  function fxBody() {
+    const s = FX.settings;
+    document.body.classList.toggle('fx-noanim', !s.animations);
+    document.body.classList.toggle('fx-fast', s.animSpeed === 'fast');
+  }
+  FX.onChange(fxBody); fxBody();
+  const fxSp = () => (FX.settings.animSpeed === 'fast' ? 0.55 : 1);
+  function fxFind(t) {
+    if (ui.tab !== 'play' || !t) return null;
+    if (t === 'coin') return $('#game [data-fx="coin"]');
+    if (t === 'coinNum') return $('#game [data-fx="coin"] b');
+    if (t === 'shield') return $('#game [data-fx="shield"]');
+    if (t === 'stage') { const b = document.querySelectorAll('#game .me .stg.built'); return b[b.length - 1] || null; }
+    if (t === 'age' || t === 'hand') return $('#game .hand');
+    if (t === 'act') return $('#game .act');
+    if (t.startsWith('nbcoin:')) return $('#game .nb[data-city="' + t.slice(7) + '"] .r');
+    if (t.startsWith('nb:')) return $('#game .nb[data-city="' + t.slice(3) + '"]');
+    return null;
+  }
+  const fxHooks = {
+    // the passed hand slides in from the neighbour it came from
+    slide(s) {
+      const el = fxFind('hand');
+      if (!el || !FX.settings.animations || !el.animate) return;
+      try { el.animate([{ transform: 'translateX(' + (s.dir * 36) + 'px)' }, { transform: 'none' }], { duration: Math.round(300 * fxSp()), easing: 'ease-out' }); } catch (e) { /* ignore */ }
+    },
+    // end of game: each score row counts up in turn
+    scores() {
+      const rows = Array.from(document.querySelectorAll('#v-play table.sc tbody tr'));
+      rows.forEach((tr, r) => setTimeout(() => {
+        FX.play('tick', { cat: 'moves', pitch: 1 + r * 0.06 });
+        tr.querySelectorAll('td[data-v]').forEach(td => FX.countUp(td, 0, Number(td.dataset.v), { duration: 400 }));
+      }, Math.round(r * 220 * fxSp())));
+    },
+  };
+  function fxStep(v, toAct) {
+    const pl = Sfx.plan(ui.fx.prev, v, ME, { toAct, land: ui.fx.land, fast: FX.settings.animSpeed === 'fast', online: !!(table && table.online),
+      colors: [SEAT_COL[ME], '#f0b354', '#6ea8fe', '#6ee7a8', '#e8eaf0'] });
+    ui.fx.prev = pl.next; ui.fx.land = 0;
+    if (!FX.settings.animations) { pl.handDelay = 0; pl.land = 0; }
+    return pl;
+  }
+  const fxRun = pl => Sfx.run(pl, FX, fxFind, fxHooks);
+  // your card flies from the hand to where it goes; returns the flight time the reveal sounds wait for
+  function fxFly(k, kind) {
+    if (!FX.settings.animations) return 0;
+    const c = $('#game .hand [data-pick="' + k + '"]');
+    const to = kind === 'wonder' ? $('#game .me .stg.next') : kind === 'sell' ? $('#game [data-fx="coin"]') : $('#game .me .citycards');
+    if (!c || !to) return 0;
+    FX.flyTo(c, to, { duration: Math.round(Sfx.LAND * fxSp()), fade: kind === 'sell' });
+    return Sfx.LAND;
+  }
 
   // ------------------------------------------------------------------ helpers
   const qBtn = text => '<button class="q" data-q="' + esc(text) + '" aria-label="Why?">?</button>';
@@ -245,7 +305,7 @@
     store.game = { state: st, dec: [] };
     save();
     table = new LocalTable(store.game);
-    ME = 0; resetSel(); ui.prevKey = ''; ui.prevCities = null;
+    ME = 0; resetSel(); ui.prevKey = ''; ui.prevCities = null; ui.fx.prev = Sfx.empty(n);
     guard('game');
     renderPlay();
   }
@@ -447,9 +507,10 @@
   // ------------------------------------------------------------------ game screen
   function renderGame() {
     const v = table.view();
-    if (v.phase === 'over') { renderEnd(v); return; }
-    const me = v.players[ME];
     const toAct = v.waiting.indexOf(ME) >= 0 && !(v.phase === 'pick' && v.pick);
+    const pl = fxStep(v, toAct);
+    if (v.phase === 'over') { renderEnd(v, pl); fxRun(pl); return; }
+    const me = v.players[ME];
     const L = E.left(v, ME), R = E.right(v, ME);
     const key = v.age + ':' + v.turn + ':' + v.phase;
     const newTurn = key !== ui.prevKey;
@@ -500,15 +561,15 @@
         const can = o.build.ok || o.oly;
         const badge = (store.settings.values && ranked ? '<div class="val" style="color:' + heat(val[k], lo, hi) + '">' + (val[k] >= 0 ? '+' : '') + val[k].toFixed(1) + '</div>' : '') +
           (o.build.ok ? (o.build.free ? '<span class="st">free</span>' : (o.build.coin + o.build.opts[0].L + o.build.opts[0].R ? '<span class="st">' + (o.build.coin + o.build.opts[0].L + o.build.opts[0].R) + '¢</span>' : '')) : '');
-        return A.face(card(v, id), { cls: (ui.sel === k ? 'sel ' : '') + (can ? '' : 'dim ') + (ui.hint && best && best.a.i === k ? 'hint ' : '') + (newTurn ? 'deal' : ''), attr: ' data-pick="' + k + '" style="animation-delay:' + (k * 35) + 'ms"', badge });
+        return A.face(card(v, id), { cls: (ui.sel === k ? 'sel ' : '') + (can ? '' : 'dim ') + (ui.hint && best && best.a.i === k ? 'hint ' : '') + (newTurn ? 'deal' : ''), attr: ' data-pick="' + k + '" style="animation-delay:' + (pl.handDelay + k * Math.round(35 * fxSp())) + 'ms"', badge });
       }).join('');
       actHTML = actPanel(v, opts, ranked);
     } else actHTML = waitHTML(v);
 
     const all = v.players.map((p, i) => playerRow(v, i, fresh)).join('');
-    vPlay.innerHTML = '<div id="game">' +
+    vPlay.innerHTML = '<div id="game" style="--land:' + pl.land + 'ms">' +
       '<div class="status"><span class="chip"><b>' + AGE[v.age] + '</b> · ' + (v.phase === 'seventh' ? '7th' : v.turn + '/6') + '</span>' +
-      '<span class="chip">' + A.coin('') + '<b>' + me.coins + '</b></span><span class="chip">' + A.shield() + '<b>' + me.shields + '</b></span>' +
+      '<span class="chip" data-fx="coin">' + A.coin('') + '<b>' + coinStart(pl, me.coins) + '</b></span><span class="chip" data-fx="shield">' + A.shield() + '<b>' + me.shields + '</b></span>' +
       '<span class="chip" title="Points if the game ended now"><span class="vp">' + est + '</span></span><span class="grow"></span>' +
       '<button class="icon-btn" id="btn-hint" title="Hint" aria-label="Hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></button>' +
       '<button class="icon-btn" id="btn-all" title="All cities" aria-label="All cities"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V9l4-3 4 3v12M13 21V12l4-3 3 3v9"/></svg></button>' +
@@ -524,6 +585,12 @@
       '<div class="panel small muted">' + (v.age === 3 ? 'Guilds in play: <b style="color:var(--text)">' + (v.n + 2) + '</b> of 10. ' : '') + 'Discard pile: <b style="color:var(--text)">' + v.discardCount + '</b> cards.' +
       (table.online ? ' Room <b style="color:var(--text)">' + esc(net.snap.code || '') + '</b>' : '') + '</div></div>' +
       '</div>';
+    fxRun(pl);
+  }
+  // while your coins are about to count up or down, the chip starts from the old number
+  function coinStart(pl, now) {
+    const c = FX.settings.animations && pl.steps.find(s => s.fx === 'count');
+    return c ? c.from : now;
   }
   function waitHTML(v) {
     const names = v.waiting.filter(s => s !== ME).map(s => v.players[s].name);
@@ -575,9 +642,9 @@
     const side = t.closest('[data-side]');
     if (side) { doAct({ t: 'side', side: side.dataset.side }); return; }
     const pk = t.closest('[data-pick]');
-    if (pk) { const k = Number(pk.dataset.pick); ui.sel = ui.sel === k ? -1 : k; ui.pay = 0; renderGame(); return; }
+    if (pk) { const k = Number(pk.dataset.pick); ui.sel = ui.sel === k ? -1 : k; ui.pay = 0; FX.play('cardFlip', { vol: 0.6 }); renderGame(); return; }
     const dp = t.closest('[data-dpick]');
-    if (dp) { const k = Number(dp.dataset.dpick); ui.sel = ui.sel === k ? -1 : k; renderGame(); return; }
+    if (dp) { const k = Number(dp.dataset.dpick); ui.sel = ui.sel === k ? -1 : k; FX.play('cardFlip', { vol: 0.6 }); renderGame(); return; }
     if (t.closest('[data-dbuild]')) { doAct({ t: 'discard', id: v.discardPile[ui.sel] }); return; }
     if (t.closest('[data-dskip]')) { doAct({ t: 'discard', id: null }); return; }
     const pay = t.closest('[data-pay]');
@@ -592,6 +659,11 @@
       else if (o.build.ok) a = { t: 'build', i: k, pay: o.build.opts[Math.min(ui.pay, o.build.opts.length - 1)] };
       else a = { t: 'build', i: k, oly: true };
       record(v, a);
+      if (!net.busy) {
+        const fl = fxFly(k, a.t);
+        if (table.online) FX.play('cardSlide');   // face down until everyone has picked
+        else ui.fx.land = fl;
+      }
       doAct(a);
     }
   }
@@ -608,11 +680,11 @@
     if (net.busy) return;
     if (table.online) {
       net.busy = true;
-      table.act(a).then(r => { if (r && !r.ok) { net.busy = false; toast(r.message); renderGame(); } });
+      table.act(a).then(r => { if (r && !r.ok) { net.busy = false; FX.play('error'); toast(r.message); renderGame(); } });
       renderGame();
       return;
     }
-    try { table.act(a); } catch (err) { toast(err.message || 'Can’t do that'); }
+    try { table.act(a); } catch (err) { ui.fx.land = 0; FX.play('error'); toast(err.message || 'Can’t do that'); }
     resetSel();
     const v = table.view();
     if (v.phase === 'over') { saveLast(v, store.game.dec || []); }
@@ -639,15 +711,18 @@
 
   // ------------------------------------------------------------------ end of game
   const CATS = [['military', 'Military', 'red'], ['coins', 'Coins', 'yellow'], ['wonder', 'Wonder', null], ['civil', 'Civil', 'blue'], ['science', 'Science', 'green'], ['commerce', 'Commerce', 'yellow'], ['guilds', 'Guilds', 'purple']];
-  function scoreTable(v, me) {
+  // zero: start every number at 0 (the end screen counts them up, see fxHooks.scores)
+  function scoreTable(v, me, zero) {
     const R = v.result;
+    const cell = (x, cls) => '<td' + (cls ? ' class="' + cls + '"' : '') + ' data-v="' + x + '">' + (zero ? 0 : x) + '</td>';
     const head = '<tr><th></th>' + v.players.map((p, i) => '<th title="' + esc(p.name) + '">' + esc(i === me ? 'You' : p.name.replace('Computer ', 'C')) + '</th>').join('') + '</tr>';
-    const rows = CATS.map(([k, label, col]) => '<tr><td><span class="rowl">' + (col ? A.chip(col) : A.stageIc()) + label + '</span></td>' + R.scores.map(s => '<td>' + s[k] + '</td>').join('') + '</tr>').join('');
-    const tot = '<tr class="tot"><td>Total</td>' + R.scores.map((s, i) => '<td class="' + (R.winners.indexOf(i) >= 0 ? 'win' : '') + '">' + s.total + '</td>').join('') + '</tr>';
+    const rows = CATS.map(([k, label, col]) => '<tr><td><span class="rowl">' + (col ? A.chip(col) : A.stageIc()) + label + '</span></td>' + R.scores.map(s => cell(s[k])).join('') + '</tr>').join('');
+    const tot = '<tr class="tot"><td>Total</td>' + R.scores.map((s, i) => cell(s.total, R.winners.indexOf(i) >= 0 ? 'win' : '')).join('') + '</tr>';
     return '<table class="sc"><thead>' + head + '</thead><tbody>' + rows + tot + '</tbody></table>';
   }
-  function renderEnd(v) {
+  function renderEnd(v, pl) {
     const R = v.result;
+    const zero = !!(pl && FX.settings.animations && pl.steps.some(s => s.fx === 'scores'));
     const won = R.winners.indexOf(ME) >= 0;
     const place = 1 + R.scores.filter(s => s.total > R.scores[ME].total).length;
     const dec = table.online ? ui.dec : (store.game && store.game.dec) || [];
@@ -656,7 +731,7 @@
       '<div class="panel popin" style="align-items:center;text-align:center;gap:2px"><div class="label">Game over</div><div style="font-size:24px;font-weight:850">' +
       (won ? (R.winners.length > 1 ? 'Shared win!' : 'You win!') : esc(R.winners.map(w => nameOf(v, w)).join(' & ')) + ' win' + (R.winners.length > 1 ? '' : 's')) + '</div>' +
       '<div class="muted small">You: ' + R.scores[ME].total + ' points · place ' + place + ' of ' + v.n + (dec.length ? ' · ' + lost.toFixed(1) + ' points lost vs Hard' : '') + '</div></div>' +
-      '<div class="panel scroll" style="overflow-x:auto">' + scoreTable(v, ME) + '</div>' +
+      '<div class="panel scroll" style="overflow-x:auto">' + scoreTable(v, ME, zero) + '</div>' +
       '<div class="row"><button class="btn primary grow" data-end="new">New game</button><button class="btn grow" data-end="study">Study</button></div></div>';
     vPlay.onclick = null;
     $('[data-end="new"]', vPlay).addEventListener('click', () => {
@@ -897,10 +972,12 @@
       '<div class="panel"><div class="row"><span class="label grow">Wonder sides</span>' + qBtn('The 1st-edition rules deal each wonder with a random side; the 2nd edition lets everyone choose. Rulebook default follows your edition. Side A is easier; side B is trickier.') + '</div>' +
       '<div class="seg sm" data-sides style="margin-top:8px">' + [['default', 'Rulebook'], ['random', 'Random'], ['choose', 'Choose'], ['A', 'All A'], ['B', 'All B']].map(([k, l]) => '<button aria-pressed="' + (s.sides === k) + '" data-v="' + k + '">' + l + '</button>').join('') + '</div></div>' +
       '<div class="panel">' + sw('values', 'Card values', 'Hard’s points estimate on every card') + sw('odds', 'Odds line', 'Hand comes back, next player, copies') + '</div>' +
+      '<div class="panel" id="fx-panel"><div class="row"><span class="label grow">Sound &amp; effects</span></div></div>' +
       '<div class="panel"><div class="setrow"><div class="grow"><b>Online play</b><span>Friends on their own phones, any mix with computers.</span></div><button class="btn small" data-online>Open</button></div></div>' +
       '<div class="panel"><div class="setrow"><div class="grow"><b>Reset</b><span>Clears the saved game, last game, scores and settings.</span></div><button class="btn small" data-reset>Reset</button></div></div>' +
       '<p class="ver">7 Wonders Lab ' + VERSION + ' · <a href="../">more board &amp; card games</a><br>Fan-made study tool, not affiliated with the publisher. Art drawn for this site.</p>' +
       '</div>';
+    FX.renderSettings($('#fx-panel', vSet));
   }
   vSet.addEventListener('click', e => {
     const b = e.target.closest('[data-ed] button');
