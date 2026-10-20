@@ -115,7 +115,8 @@
     const from = c.from && c.from.length ? '<div class="fr">free with ' + c.from[0] + '</div>' : '';
     return '<div class="card ' + c.color + ' ' + (o.cls || '') + '"' + (o.attr || '') + '>' +
       '<div class="band"><span class="cst' + (nCost >= 4 ? ' many' : '') + '">' + (cost(c) || '<span class="free">free</span>') + '</span></div>' +
-      '<div class="nm' + (c.name.length > 9 ? ' long' : '') + '" lang="en">' + softName(c.name) + '</div>' +
+      // smaller type when the name is long or has a word of 8+ letters, so no word is ever split mid-way ("Worksho-p")
+      '<div class="nm' + (c.name.length > 9 || c.name.split(' ').some(w => w.length >= 8) ? ' long' : '') + '" lang="en">' + softName(c.name) + '</div>' +
       '<div class="ef">' + effect(c) + '</div>' + (o.size === 'big' ? from + chain : '') + (o.badge || '') + '</div>';
   }
 
