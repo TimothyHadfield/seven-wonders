@@ -1,0 +1,871 @@
+/* 7 Wonders Lab: UI controller. One store object (localStorage 'sevenwonders:v1'), render*() functions
+   writing template strings, one delegated click handler per view. The rules live in SWEngine; a "table"
+   object is the seat transport (local state on this device, or an online room through js/online.js). */
+(function () {
+  'use strict';
+  const VERSION = '1.0 · 2026-10-20';
+  const E = SWEngine, Cd = SWCards, A = SWArt, Bt = SWBots, OG = SWOnlineGame;
+  const KEY = 'sevenwonders:v1';
+  let ME = 0;
+  const $ = (s, r) => (r || document).querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const SEAT_COL = ['#f0b354', '#6ea8fe', '#e98bd0', '#6ee7a8', '#c9a0ff', '#ff9f7a', '#7fe0e0'];
+  const LEVEL_NOTE = { easy: 'Random cards', medium: 'Points guess', hard: 'Tuned + exact' };
+  // Measured by tools/measure-levels.js (one computer vs the rest, seats rotated, 3/4/5/7 players), see progress.md.
+  // 2026-10-20, 400 games per matchup and player count (1st edition): wins at 3/4/5/7 players.
+  const STRENGTH_NOTE = { games: '6,400', hardMedium: '61% (78/67/58/40%)', mediumEasy: '62% (76/68/58/46%)', hardEasy: '85% (91/92/81/74%)', fair: '23% (33/25/20/14%)' };
+  const AGE = ['', 'I', 'II', 'III'];
+
+  // ------------------------------------------------------------------ storage
+  function fresh() {
+    return { v: 1, settings: { ed: 1, sides: 'default', level: 'medium', n: 4, values: false, odds: true, name: '' },
+      game: null, last: null, online: false, score: null };
+  }
+  const store = (function () {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && s.v === 1) {
+        const out = Object.assign(fresh(), s, { settings: Object.assign(fresh().settings, s.settings || {}) });
+        const st = out.settings, def = fresh().settings;
+        if (![1, 2].includes(st.ed)) st.ed = def.ed;
+        if (!['default', 'random', 'choose', 'A', 'B'].includes(st.sides)) st.sides = def.sides;
+        if (!['easy', 'medium', 'hard'].includes(st.level)) st.level = def.level;
+        if (!(st.n >= 3 && st.n <= 7)) st.n = def.n;
+        st.values = !!st.values; st.odds = st.odds !== false;
+        if (typeof st.name !== 'string') st.name = '';
+        return out;
+      }
+    } catch (e) { /* private mode or bad JSON: start fresh */ }
+    return fresh();
+  })();
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* storage full or blocked: keep playing */ }
+  }
+
+  // ------------------------------------------------------------------ tables (seat transport)
+  function LocalTable(g) { this.g = g; }
+  LocalTable.prototype.view = function () { return E.view(this.g.state, ME); };
+  LocalTable.prototype.act = function (a) { this.g.state = E.apply(this.g.state, ME, a); save(); return Promise.resolve({ ok: true }); };
+  function OnlineTable() { this.online = true; }
+  OnlineTable.prototype.view = function () { return OG.viewFromSnap(net.snap); };
+  OnlineTable.prototype.act = function (a) { return net.room.act(a); };
+
+  let table = null;
+  if (store.game && store.game.state) {
+    try { table = new LocalTable(store.game); table.view(); } catch (e) { table = null; store.game = null; save(); }
+  }
+
+  const net = { room: null, snap: null, busy: false, connecting: false, savedLast: false };
+  function loadOnline() {
+    if (net.room) return Promise.resolve(net.room);
+    return import(new URL('js/online.js?v=1', location.href).href).then(mod => {
+      if (net.room) return net.room;
+      net.room = mod.createOnline({ game: OG.game, gameId: 'seven-wonders', botDelayMs: 700 });
+      net.room.on('change', onNet);
+      net.room.on('error', msg => { net.busy = false; toast(String(msg)); if (ui.tab === 'play') renderPlay(); });
+      return net.room;
+    });
+  }
+  function backToLocal() { ME = 0; net.savedLast = false; table = store.game && store.game.state ? new LocalTable(store.game) : null; }
+  function onNet(snap) {
+    net.snap = snap;
+    net.busy = false;
+    if (snap.status === 'playing' || snap.status === 'finished') {
+      if (!table || !table.online) { table = new OnlineTable(); resetSel(); net.savedLast = false; ui.dec = []; }
+      ME = snap.mySeat >= 0 ? snap.mySeat : 0;
+      if (snap.status === 'finished' && snap.pub && !net.savedLast) { net.savedLast = true; saveLast(table.view(), ui.dec || []); }
+    } else if (table && table.online) backToLocal();
+    if (snap.status === 'closed' || snap.status === 'left') {
+      store.online = false; save();
+      if (snap.status === 'closed') toast('The room was closed');
+    }
+    if (ui.tab === 'play') renderPlay();
+  }
+  function leaveOnline() {
+    const r = net.room;
+    store.online = false; ui.online = false; save();
+    backToLocal(); resetSel();
+    if (r) r.leave().catch(() => {});
+    renderPlay();
+  }
+
+  // ------------------------------------------------------------------ ui state
+  const ui = { tab: 'play', online: false, sel: -1, pay: 0, hint: null, prevKey: '', prevCities: null, dec: [], oddsTab: 'cards', oddsN: 4, oddsAge: 1, draftSort: 'win', sci: [0, 0, 0, 0], mil: null };
+  function resetSel() { ui.sel = -1; ui.pay = 0; ui.hint = null; }
+
+  // ------------------------------------------------------------------ helpers
+  const qBtn = text => '<button class="q" data-q="' + esc(text) + '" aria-label="Why?">?</button>';
+  function heat(x, lo, hi) { const f = Math.max(0, Math.min(1, (x - lo) / (hi - lo))); return 'hsl(' + Math.round(f * 130) + ', 70%, 62%)'; }
+  const cap = s => s[0].toUpperCase() + s.slice(1);
+  function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2400);
+  }
+  function confirmBox(msg, yes, onYes) {
+    const back = document.createElement('div');
+    back.className = 'confirm-back';
+    back.innerHTML = '<div class="panel"><p style="margin:0 0 14px">' + esc(msg) + '</p><div class="row" style="justify-content:flex-end">' +
+      '<button class="btn ghost" data-c="no">Cancel</button><button class="btn primary" data-c="yes">' + esc(yes) + '</button></div></div>';
+    back.addEventListener('click', e => {
+      const b = e.target.closest('[data-c]');
+      if (e.target === back || b) { back.remove(); if (b && b.dataset.c === 'yes') onYes(); }
+    });
+    document.body.appendChild(back);
+  }
+  function sheet(title, html) {
+    closeSheet();
+    const back = document.createElement('div');
+    back.className = 'sheet-back'; back.id = 'sheet';
+    back.innerHTML = '<div class="sheet"><div class="row"><h3 class="grow">' + esc(title) + '</h3><button class="btn small ghost" data-close>Close</button></div><div class="scroll">' + html + '</div></div>';
+    back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) closeSheet(); });
+    document.body.appendChild(back);
+  }
+  function closeSheet() { const s = $('#sheet'); if (s) s.remove(); }
+  const card = (g, id) => E.card(g, id);
+  const nameOf = (v, s) => (s === ME ? 'You' : v.players[s].name);
+  const wname = (v, p) => Cd.EDITIONS[v.ed].wonders[p.wonder].name;
+
+  // ------------------------------------------------------------------ tabs + help bubbles
+  $('#brand').insertAdjacentHTML('afterbegin', A.ICON);
+  $('#tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(b.dataset.tab, true); });
+  function showTab(tab, push) {
+    ui.tab = tab;
+    closeSheet();
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + tab));
+    if (push) try { history.pushState({ tab }, '', '#' + tab); } catch (e) { /* file:// */ }
+    render();
+  }
+  window.addEventListener('popstate', e => { showTab((e.state && e.state.tab) || 'play', false); });
+  document.addEventListener('click', e => {
+    const old = $('.pop');
+    const q = e.target.closest('[data-q]');
+    if (old) old.remove();
+    if (!q || (old && old.dataset.for === q.dataset.q)) return;
+    const pop = document.createElement('div');
+    pop.className = 'pop'; pop.textContent = q.dataset.q; pop.dataset.for = q.dataset.q;
+    document.body.appendChild(pop);
+    const r = q.getBoundingClientRect();
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+    const x = Math.min(window.innerWidth - w - 12, Math.max(12, r.left + r.width / 2 - w / 2));
+    let y = r.bottom + 8;
+    if (y + h > window.innerHeight - 8) y = r.top - h - 8;
+    pop.style.left = x + 'px'; pop.style.top = Math.max(8, y) + 'px';
+  });
+  function render() {
+    if (ui.tab === 'play') renderPlay();
+    else if (ui.tab === 'score') renderScore();
+    else if (ui.tab === 'odds') renderOdds();
+    else if (ui.tab === 'study') renderStudy();
+    else renderSettings();
+  }
+
+  // ================================================================== PLAY
+  const vPlay = $('#v-play');
+  function renderPlay() { if (table) renderGame(); else if (ui.online) renderOnline(); else renderSetup(); }
+
+  function strengthText() {
+    const S = STRENGTH_NOTE;
+    if (!S) return 'Easy plays a random legal card. Medium guesses each card\'s points. Hard uses weights tuned by self-play, counts exact points in Age III and keeps good cards from the next player.';
+    return 'Measured over ' + S.games + ' simulated games (one computer against the others, 3–7 players): ' +
+      'Hard wins ' + S.hardMedium + ' against Medium players, Medium wins ' + S.mediumEasy + ' against Easy, Hard wins ' + S.hardEasy + ' against Easy, at 3/4/5/7 players. A fair share would be ' + S.fair + '.';
+  }
+  function renderSetup() {
+    const s = store.settings;
+    vPlay.innerHTML = '<div class="setup">' +
+      '<div class="hero">' + A.ICON + '<div><h1>7 Wonders Lab</h1><p>Draft against measured computers, with live odds.</p></div></div>' +
+      '<div class="panel">' +
+      '<div class="label">Players</div><div class="seg" data-set="n">' + [3, 4, 5, 6, 7].map(n => '<button aria-pressed="' + (s.n === n) + '" data-v="' + n + '">' + n + '</button>').join('') + '</div>' +
+      '<div class="row"><span class="label grow">Computers</span>' + qBtn(strengthText()) + '</div>' +
+      '<div class="seg" data-set="level">' + ['easy', 'medium', 'hard'].map(l => '<button aria-pressed="' + (s.level === l) + '" data-v="' + l + '">' + cap(l) + '<small>' + LEVEL_NOTE[l] + '</small></button>').join('') + '</div>' +
+      '<button class="btn primary" data-start style="width:100%">Deal</button>' +
+      '<button class="btn" data-on="open" style="width:100%">Play online</button>' +
+      '<p class="muted small" style="margin:0">' + (s.ed === 1 ? '1st' : '2nd') + ' edition · sides ' + esc(sidesWord()) + ' · change in Settings</p>' +
+      '</div>' +
+      (store.last ? '<button class="btn ghost" data-go="study">Study your last game</button>' : '') +
+      '<details class="panel" style="gap:6px"><summary style="cursor:pointer;font-weight:650">How 7 Wonders works</summary>' +
+      '<p class="muted" style="margin:8px 0 0;font-size:13.5px">Three ages, six turns each. Everyone picks one card from their hand at the same time, then passes the rest on. ' +
+      'A card can be built (pay its cost, buying missing resources from your two neighbours for 2 coins each), used to build the next stage of your wonder, or sold for 3 coins. ' +
+      'At the end of each age you fight both neighbours with shields. Most points after Age III wins; ties go to the most coins.</p></details>' +
+      '</div>';
+  }
+  function sidesWord() {
+    const s = store.settings.sides;
+    if (s === 'default') return store.settings.ed === 1 ? 'random' : 'chosen';
+    return s === 'choose' ? 'chosen' : s === 'random' ? 'random' : s + ' only';
+  }
+  function sidesOpt() { const s = store.settings.sides; return s === 'default' ? undefined : s; }
+  function startGame() {
+    const s = store.settings;
+    const n = s.n;
+    const names = ['You'];
+    const bots = [null];
+    for (let i = 1; i < n; i++) { names.push('Computer ' + i); bots.push(s.level); }
+    const st = E.newGame({ ed: s.ed, n, names, bots, sides: sidesOpt(), seed: (Math.random() * 4294967296) >>> 0 });
+    store.game = { state: st, dec: [] };
+    save();
+    table = new LocalTable(store.game);
+    ME = 0; resetSel(); ui.prevKey = ''; ui.prevCities = null;
+    renderPlay();
+  }
+  vPlay.addEventListener('click', e => {
+    const t = e.target;
+    const segB = t.closest('[data-set] button');
+    if (segB) {
+      const k = segB.parentElement.dataset.set;
+      store.settings[k] = k === 'level' ? segB.dataset.v : Number(segB.dataset.v);
+      save(); renderPlay(); return;
+    }
+    if (t.closest('[data-start]')) { startGame(); return; }
+    const go = t.closest('[data-go]');
+    if (go) { showTab(go.dataset.go, true); return; }
+    const on = t.closest('[data-on]');
+    if (on) { onlineBtn(on.dataset.on); return; }
+    const seat = t.closest('[data-seat]');
+    if (seat && net.room) { net.room.setSeat(Number(seat.dataset.seat), seat.dataset.kind).then(r => { if (!r.ok) toast(r.message); }); return; }
+    if (table) onGameClick(e);
+  });
+
+  // ------------------------------------------------------------------ online lobby
+  async function onlineBtn(k) {
+    if (k === 'open') { ui.online = true; renderPlay(); loadOnline().catch(() => toast('Online play couldn’t load. Check your internet.')); return; }
+    if (k === 'back') {
+      if (net.snap && net.snap.status === 'lobby') { confirmBox('Leave this room?', 'Leave', leaveOnline); return; }
+      ui.online = false; renderPlay(); return;
+    }
+    if (k === 'start') {
+      if (net.connecting) return;
+      net.connecting = true; renderPlay();
+      const r = await net.room.start();
+      net.connecting = false;
+      if (!r.ok) toast(r.message);
+      renderPlay(); return;
+    }
+    if (k !== 'create' && k !== 'join') return;
+    const nameEl = $('#on-name');
+    if (nameEl) { store.settings.name = nameEl.value.trim().slice(0, 20); save(); }
+    const name = store.settings.name || 'Player';
+    const codeEl = $('#on-code');
+    const code = codeEl ? codeEl.value.trim().toUpperCase() : '';
+    if (k === 'join' && code.length !== 5) { toast('Room codes have 5 letters'); return; }
+    if (net.connecting) return;
+    net.connecting = true; renderPlay();
+    let r;
+    try {
+      const room = await loadOnline();
+      if (k === 'create') {
+        const s = store.settings;
+        const seats = ['human'].concat(new Array(s.n - 1).fill('empty'));
+        r = await room.createRoom({ name, seats, options: { ed: s.ed, sides: sidesOpt() || (s.ed === 1 ? 'random' : 'choose'), level: s.level } });
+      } else r = await room.joinRoom(code, name);
+    } catch (e) { r = { ok: false, message: 'Online play couldn’t load. Check your internet.' }; }
+    net.connecting = false;
+    if (r.ok) { store.online = true; save(); } else toast(r.message);
+    renderPlay();
+  }
+  function renderOnline() {
+    const s = net.snap;
+    const st = s ? s.status : 'none';
+    let body;
+    if (net.connecting && st !== 'lobby') body = '<div class="panel"><b>Connecting…</b><p class="muted small" style="margin:0">Talking to the game server.</p></div>';
+    else if (st === 'joining') body = '<div class="panel"><b>Joining…</b><p class="muted small" style="margin:0">' + (s.askingHost ? 'That seat is someone else\'s. Waiting for the host to Allow.' : 'Waiting for the host to give you a seat.') + '</p></div>';
+    else if (st === 'lobby') {
+      const host = s.isHost;
+      const o = s.options || {};
+      const seats = s.seats.map((x, i) => {
+        const who = x.kind === 'human' ? esc(x.name || 'Player') + (i === s.mySeat ? ' <span class="muted">(you)</span>' : '') + (x.online ? '' : ' <span class="muted">· away</span>') :
+          x.kind === 'computer' ? 'Computer' : '<span class="muted">Open seat</span>';
+        let b = '';
+        if (host && i !== s.mySeat) b = x.kind === 'empty' ? '<button class="btn small" data-seat="' + i + '" data-kind="computer">Computer</button>' :
+          '<button class="btn small ghost" data-seat="' + i + '" data-kind="empty">' + (x.kind === 'human' ? 'Remove' : 'Open') + '</button>';
+        return '<div class="seatrow"><span class="cchip" style="background:' + SEAT_COL[i] + ';width:9px;height:9px;border-radius:50%"></span><span class="grow">' + who + '</span>' + b + '</div>';
+      }).join('');
+      body = '<div class="panel" style="align-items:center;gap:4px"><span class="label">Room code</span><div class="code-big">' + esc(s.code) + '</div>' +
+        '<p class="muted small" style="margin:0;text-align:center">Friends open this site, tap Play online and type the code.</p></div>' +
+        '<div class="panel"><span class="label">Seats · ' + (o.ed === 2 ? '2nd' : '1st') + ' edition</span><div class="seats scroll" style="max-height:38dvh">' + seats + '</div>' +
+        (host ? '<button class="btn primary" data-on="start" style="width:100%"' + (net.connecting ? ' disabled' : '') + '>' + (net.connecting ? 'Starting…' : 'Start') + '</button>' +
+          '<p class="muted small" style="margin:0">Open seats become ' + esc(cap(o.level || 'medium')) + ' computers.</p>' :
+          '<p class="muted small" style="margin:0">Waiting for the host to start…</p>') + '</div>';
+    } else {
+      body = '<div class="panel"><span class="label">Your name</span>' +
+        '<input class="txt" id="on-name" maxlength="20" autocomplete="nickname" placeholder="Name" value="' + esc(store.settings.name || '') + '">' +
+        '<button class="btn primary" data-on="create" style="width:100%">Create a room</button>' +
+        '<p class="muted small" style="margin:0">Uses your player count, edition and computer level. Open seats can be friends or computers.</p></div>' +
+        '<div class="panel"><span class="label">Join a friend</span><div class="row">' +
+        '<input class="txt code" id="on-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code">' +
+        '<button class="btn primary" data-on="join">Join</button></div></div>';
+    }
+    vPlay.innerHTML = '<div class="setup"><div class="row"><button class="btn small ghost" data-on="back">Back</button><span class="grow"></span><span class="label">Play online</span></div>' + body + '</div>';
+  }
+
+  // ------------------------------------------------------------------ game screen pieces
+  function resIcons(str) { return str.split('').map(r => A.res(r)).join(''); }
+  function produceRow(v, p) {
+    // what this city makes for itself: fixed units counted, choices shown as a/b
+    const fixed = {}, alts = [];
+    for (const s of E.slots(v, p, true)) { if (s.length === 1) fixed[s] = (fixed[s] || 0) + 1; else alts.push(s); }
+    const parts = [];
+    for (const r of Cd.RAW.concat(Cd.MAN)) if (fixed[r]) parts.push('<span class="g">' + A.res(r) + (fixed[r] > 1 ? '<b>' + fixed[r] + '</b>' : '') + '</span>');
+    for (const s of alts) parts.push('<span class="g alt">' + (s.length > 4 ? '<span class="small muted">any</span>' + (s.indexOf('W') >= 0 ? A.res('W', 'ic s') + A.res('O', 'ic s') : A.res('G', 'ic s') + A.res('P', 'ic s')) : s.split('').map(r => A.res(r, 'ic s')).join('<b>/</b>')) + '</span>');
+    return parts.join('');
+  }
+  function sciRow(v, p) {
+    const s = E.sciSymbols(v, p);
+    const parts = [];
+    for (const k of Cd.SCI) if (s.c[k]) parts.push('<span class="g">' + A.sci(k) + '<b>' + s.c[k] + '</b></span>');
+    if (s.wild) parts.push('<span class="g">' + A.wild() + '<b>' + s.wild + '</b></span>');
+    return parts.join('');
+  }
+  function colorCounts(v, p) {
+    return '<span class="cols">' + Cd.COLORS.map(c => { const n = E.countColor(v, p, c); return n ? '<span class="cc" style="background:' + A.COLOR_HEX[c] + '">' + n + '</span>' : ''; }).join('') + '</span>';
+  }
+  function stagesHTML(v, p, big) {
+    const all = E.stagesOf(v, p);
+    if (!all.length) return '<span class="muted small">Side not chosen</span>';
+    return all.map((s, k) => '<div class="stg ' + (k < p.stages ? 'built' : k === p.stages ? 'next' : '') + '" title="' + esc(Cd.stageText(s)) + '">' +
+      (k < p.stages ? '' : A.resCost(s[0]) + '<b class="arr">›</b>') + A.stageEffect(s) + '</div>').join('');
+  }
+  function milSum(p) { return p.mil.reduce((a, b) => a + b, 0); }
+  function lastMove(v, s) {
+    if (!v.last) return '';
+    const m = v.last.moves.filter(x => x.s === s);
+    if (!m.length) return '';
+    return m.map(x => x.t === 'build' ? 'built <b>' + esc(card(v, x.id).name) + '</b>' + (x.free === 'discard' ? ' (from discard)' : '') : x.t === 'wonder' ? 'built <b>stage ' + x.stage + '</b>' : '<b>sold</b> a card').join(', ');
+  }
+  function cityChips(v, p, fresh) {
+    const ids = p.city.slice().sort((a, b) => Cd.COLORS.indexOf(card(v, a).color) - Cd.COLORS.indexOf(card(v, b).color));
+    return '<div class="citycards">' + ids.map(id => '<span class="mc' + (fresh && fresh.has(id) ? ' new' : '') + '" style="background:' + A.COLOR_HEX[card(v, id).color] + '">' + esc(card(v, id).name) + '</span>').join('') + '</div>';
+  }
+  function playerRow(v, s, fresh) {
+    const p = v.players[s];
+    return '<div class="prow' + (s === ME ? ' mine' : '') + '" data-city="' + s + '"><div class="t"><span class="cchip" style="background:' + SEAT_COL[s] + ';width:9px;height:9px;border-radius:50%"></span>' +
+      '<span class="nmx">' + esc(nameOf(v, s)) + ' · ' + esc(wname(v, p)) + (p.side ? ' ' + p.side : '') + '</span>' +
+      '<span class="chip">' + A.coin('') + '<b>' + p.coins + '</b></span><span class="chip">' + A.shield() + '<b>' + p.shields + '</b></span>' +
+      '<span class="chip" title="Military tokens">⚔ <b>' + milSum(p) + '</b></span></div>' +
+      '<div class="stages">' + stagesHTML(v, p, false) + '</div>' +
+      '<div class="resrow">' + produceRow(v, p) + sciRow(v, p) + '</div>' + cityChips(v, p, fresh) + '</div>';
+  }
+  function logHTML(v) {
+    const out = [];
+    const log = v.log || [];
+    for (let k = log.length - 1; k >= 0 && out.length < 120; k--) {
+      const L = log[k];
+      for (const m of L.moves) {
+        const who = nameOf(v, m.s);
+        const what = m.t === 'build' ? 'built <b>' + esc(card(v, m.id).name) + '</b>' + (m.free === 'chain' ? ' (chain)' : m.free === 'discard' ? ' from the discard' : m.free === 'oly' ? ' free' : (m.pay.L + m.pay.R ? ' paying ' + (m.pay.L + m.pay.R) : '')) :
+          m.t === 'wonder' ? 'built wonder stage ' + m.stage : 'sold a card';
+        out.push('<li>' + esc(who) + ' ' + what + (m.gain ? ' <span class="num">+' + m.gain + '</span>' : '') + '</li>');
+      }
+      out.push('<li class="h">Age ' + AGE[L.age] + ' · turn ' + L.turn + '</li>');
+    }
+    for (const w of (v.wars || []).slice().reverse()) {
+      void w;
+    }
+    return out.length ? '<ul class="log">' + out.join('') + '</ul>' : '<p class="muted small">Nothing yet.</p>';
+  }
+  function boardHTML(v, s) {
+    const p = v.players[s];
+    const W = Cd.EDITIONS[v.ed].wonders[p.wonder];
+    const all = E.stagesOf(v, p);
+    return '<div class="board"><div class="row">' + A.emblem(p.wonder) + '<div class="grow"><b>' + esc(W.full) + '</b><div class="muted small">Side ' + (p.side || '?') + ' · makes ' + A.res(W.res) + '</div></div></div>' +
+      '<div class="bs">' + all.map((st, k) => '<div class="stg ' + (k < p.stages ? 'built' : k === p.stages ? 'next' : '') + '"><span class="cost">' + A.resCost(st[0]) + '</span><span>' + A.stageEffect(st) + '</span></div>').join('') + '</div>' +
+      '<div class="small muted">' + all.map((st, k) => 'Stage ' + (k + 1) + ': ' + esc(Cd.stageText(st))).join('<br>') + '</div></div>';
+  }
+  function citySheet(v, s) {
+    const p = v.players[s];
+    const sc = E.scoreOne(v, s);
+    sheet(nameOf(v, s) + ' · ' + wname(v, p), boardHTML(v, s) +
+      '<div style="margin-top:10px">' + playerRow(v, s) + '</div>' +
+      '<p class="small muted" style="margin:8px 0 0">Points if the game ended now: <b class="num" style="color:var(--text)">' + sc.total + '</b> (military ' + sc.military + ', coins ' + sc.coins + ', wonder ' + sc.wonder + ', civil ' + sc.civil + ', science ' + sc.science + ', commerce ' + sc.commerce + ', guilds ' + sc.guilds + ')</p>');
+  }
+
+  // odds for the selected card at the moment of choosing
+  function oddsFor(v, id) {
+    const out = [];
+    const t = v.turn;
+    const back = t + v.n;
+    if (v.phase === 'pick') out.push(back <= 6 ? 'Hand back on turn <b>' + back + '</b> with <b>' + (7 - back + 1) + '</b> cards' : 'You won’t see this hand again');
+    const nxt = v.age === 2 ? E.right(v, ME) : E.left(v, ME);
+    const b = E.buildCost(v, nxt, id, false);
+    out.push(nameOf(v, nxt) + (b.ok ? ' <b>can</b> build it next' : ' can’t build it next'));
+    const copies = Cd.ageDeck(v.ed, card(v, id).age, v.n).filter(x => x === id).length;
+    if (card(v, id).color !== 'purple') out.push('<b>' + copies + '</b> in this age');
+    return out.join(' · ');
+  }
+  function rankNow(v) {
+    try { return Bt.rank(v, ME, v.hand); } catch (e) { return []; }
+  }
+
+  // ------------------------------------------------------------------ game screen
+  function renderGame() {
+    const v = table.view();
+    if (v.phase === 'over') { renderEnd(v); return; }
+    const me = v.players[ME];
+    const toAct = v.waiting.indexOf(ME) >= 0 && !(v.phase === 'pick' && v.pick);
+    const L = E.left(v, ME), R = E.right(v, ME);
+    const key = v.age + ':' + v.turn + ':' + v.phase;
+    const newTurn = key !== ui.prevKey;
+    if (newTurn) { resetSel(); ui.prevKey = key; }
+    // newly built cards (for the pop animation)
+    const fresh = new Set();
+    if (ui.prevCities) v.players.forEach((p, i) => p.city.forEach(id => { if ((ui.prevCities[i] || []).indexOf(id) < 0) fresh.add(id); }));
+    ui.prevCities = v.players.map(p => p.city.slice());
+    const est = E.scoreOne(v, ME).total;
+    const pr = E.prices(v, me);
+
+    const nb = s => {
+      const p = v.players[s];
+      const sells = {};
+      for (const sl of E.slots(v, p, false)) for (const r of sl) sells[r] = 1;
+      const side = s === L ? 'L' : 'R';
+      const list = Object.keys(sells).sort((a, b) => 'WSCOGLP'.indexOf(a) - 'WSCOGLP'.indexOf(b));
+      return '<div class="nb" data-city="' + s + '"><div class="t">' + (s === L ? '◀ ' : '') + '<span class="nmx">' + esc(p.name) + ' · ' + esc(wname(v, p)) + '</span>' + (s === R ? ' ▶' : '') + '</div>' +
+        '<div class="r">' + A.shield() + '<b style="color:var(--text)">' + p.shields + '</b> ' + A.coin('') + '<b style="color:var(--text)">' + p.coins + '</b> <span>' + p.stages + '/' + E.stagesOf(v, p).length + '</span>' + A.stageIc() + '</div>' +
+        '<div class="r">' + (list.length ? list.map(r => A.res(r)).join('') + ' <span>' + (list.some(r => Cd.RAW.indexOf(r) >= 0) ? pr[side][list.find(r => Cd.RAW.indexOf(r) >= 0)] : pr[side][list[0]]) + '¢</span>' : '<span>sells nothing</span>') + '</div>' +
+        '<div class="last">' + (lastMove(v, s) || '&nbsp;') + '</div></div>';
+    };
+
+    let handHTML = '', actHTML = '';
+    if (v.phase === 'side') {
+      if (!me.side) {
+        const W = Cd.EDITIONS[v.ed].wonders[me.wonder];
+        handHTML = '<div class="wpick" style="width:100%">' + ['A', 'B'].map(sd => '<div class="panel" data-side="' + sd + '"><b>Side ' + sd + '</b><div class="stages">' +
+          W[sd].map(st => '<div class="stg" style="height:auto;min-height:40px;flex-direction:column"><span>' + A.resCost(st[0]) + '</span><span>' + A.stageEffect(st) + '</span></div>').join('') + '</div></div>').join('') + '</div>';
+        actHTML = '<div class="head"><b>Pick a side for ' + esc(W.full) + '</b></div><div class="tx">Side A is the easier one. Tap a board.</div>';
+      } else actHTML = waitHTML(v);
+    } else if (v.phase === 'discard' && v.pendingDiscard === ME && v.discardPile) {
+      handHTML = v.discardPile.map((id, k) => A.face(card(v, id), { cls: (ui.sel === k ? 'sel' : '') + (newTurn ? ' deal' : ''), attr: ' data-dpick="' + k + '"' })).join('');
+      const id = v.discardPile[ui.sel];
+      actHTML = '<div class="head"><b>Free build from the discard pile</b></div><div class="tx">' + (id ? esc(card(v, id).name) + ': ' + esc(Cd.effectText(card(v, id))) : 'Your wonder lets you build one discarded card for free. Tap one.') + '</div>' +
+        '<div class="btns" style="grid-template-columns:1fr 1fr"><button class="btn primary" data-dbuild' + (id ? '' : ' disabled') + '>Build free</button><button class="btn" data-dskip>Skip</button></div>';
+      handHTML = '<div class="row" style="overflow-x:auto;gap:3px;align-items:flex-end;padding-top:8px">' + handHTML + '</div>';
+    } else if ((v.phase === 'pick' || v.phase === 'seventh') && toAct) {
+      const ranked = (store.settings.values || ui.hint) ? rankNow(v) : null;
+      const best = ranked && ranked[0];
+      const val = {};
+      if (ranked) for (const r of ranked) { const k = r.a.i; if (!(k in val) || r.v > val[k]) val[k] = r.v; }
+      const vals = Object.values(val);
+      const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+      const opts = E.options(v, ME, v.hand);
+      handHTML = v.hand.map((id, k) => {
+        const o = opts[k];
+        const can = o.build.ok || o.oly;
+        const badge = (store.settings.values && ranked ? '<div class="val" style="color:' + heat(val[k], lo, hi) + '">' + (val[k] >= 0 ? '+' : '') + val[k].toFixed(1) + '</div>' : '') +
+          (o.build.ok ? (o.build.free ? '<span class="st">free</span>' : (o.build.coin + o.build.opts[0].L + o.build.opts[0].R ? '<span class="st">' + (o.build.coin + o.build.opts[0].L + o.build.opts[0].R) + '¢</span>' : '')) : '');
+        return A.face(card(v, id), { cls: (ui.sel === k ? 'sel ' : '') + (can ? '' : 'dim ') + (ui.hint && best && best.a.i === k ? 'hint ' : '') + (newTurn ? 'deal' : ''), attr: ' data-pick="' + k + '" style="animation-delay:' + (k * 35) + 'ms"', badge });
+      }).join('');
+      actHTML = actPanel(v, opts, ranked);
+    } else actHTML = waitHTML(v);
+
+    const all = v.players.map((p, i) => playerRow(v, i, fresh)).join('');
+    vPlay.innerHTML = '<div id="game">' +
+      '<div class="status"><span class="chip"><b>' + AGE[v.age] + '</b> · ' + (v.phase === 'seventh' ? '7th' : v.turn + '/6') + '</span>' +
+      '<span class="chip">' + A.coin('') + '<b>' + me.coins + '</b></span><span class="chip">' + A.shield() + '<b>' + me.shields + '</b></span>' +
+      '<span class="chip" title="Points if the game ended now"><span class="vp">' + est + '</span></span><span class="grow"></span>' +
+      '<button class="icon-btn" id="btn-hint" title="Hint" aria-label="Hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></button>' +
+      '<button class="icon-btn" id="btn-all" title="All cities" aria-label="All cities"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V9l4-3 4 3v12M13 21V12l4-3 3 3v9"/></svg></button>' +
+      '<button class="icon-btn" id="btn-log" title="Log" aria-label="Log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>' +
+      '<button class="icon-btn" id="btn-menu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>' +
+      '<div id="g-all">' + all + '</div>' +
+      '<div class="nbs">' + nb(L) + nb(R) + '</div>' +
+      '<div class="me" data-city="' + ME + '"><div class="wrow">' + A.emblem(me.wonder) + '<div class="stages">' + stagesHTML(v, me, false) + '</div></div>' +
+      '<div class="resrow">' + produceRow(v, me) + sciRow(v, me) + '</div>' + cityChips(v, me, fresh) + '</div>' +
+      '<div class="hand">' + handHTML + '</div>' +
+      '<div class="act">' + actHTML + '</div>' +
+      '<div id="g-side"><div class="panel scroll" style="flex:1"><div class="label" style="margin-bottom:6px">Log</div>' + logHTML(v) + '</div>' +
+      '<div class="panel small muted">' + (v.age === 3 ? 'Guilds in play: <b style="color:var(--text)">' + (v.n + 2) + '</b> of 10. ' : '') + 'Discard pile: <b style="color:var(--text)">' + v.discardCount + '</b> cards.' +
+      (table.online ? ' Room <b style="color:var(--text)">' + esc(net.snap.code || '') + '</b>' : '') + '</div></div>' +
+      '</div>';
+  }
+  function waitHTML(v) {
+    const names = v.waiting.filter(s => s !== ME).map(s => v.players[s].name);
+    return '<div class="wait"><span class="dots"><i></i><i></i><i></i></span>' + (names.length ? 'Waiting for ' + esc(names.slice(0, 3).join(', ')) + (names.length > 3 ? '…' : '') : 'Working…') + '</div>' +
+      (v.pick ? '<div class="tx">Your pick: ' + esc(v.pick.t === 'sell' ? 'sell ' : v.pick.t === 'wonder' ? 'wonder stage with ' : 'build ') + esc(card(v, v.pick.id).name) + '</div>' : '');
+  }
+  function actPanel(v, opts, ranked) {
+    const k = ui.sel;
+    if (k < 0 || !v.hand[k]) {
+      const sc = E.stageCost(v, ME);
+      return '<div class="head"><b>' + (v.phase === 'seventh' ? 'Play your 7th card' : 'Pick a card') + '</b><span class="grow"></span>' + (ui.hint && ranked && ranked[0] ? '<span class="small">Hint: <b>' + hintWords(v, ranked[0]) + '</b></span>' : '') + '</div>' +
+        '<div class="tx">' + (v.phase === 'pick' ? 'Hands pass ' + (v.age === 2 ? 'right ▶' : '◀ left') + ' this age. ' : '') + (sc.ok ? 'Your next wonder stage is affordable.' : 'Next wonder stage: ' + esc(sc.why || '')) + '</div>' +
+        (store.settings.odds && v.phase === 'pick' ? '<div class="odds">' + (v.turn + v.n <= 6 ? 'This hand comes back on turn <b>' + (v.turn + v.n) + '</b>' : 'You won’t see this hand again') + (v.age === 3 ? ' · ' + (v.n + 2) + ' guilds in this age' : '') + '</div>' : '');
+    }
+    const id = v.hand[k];
+    const c = card(v, id);
+    const o = opts[k];
+    const b = o.build;
+    const w = o.wonder;
+    const pays = b.ok ? b.opts : w.ok ? w.opts : [];
+    const payLabel = p => (p.L ? '◀' + p.L : '') + (p.L && p.R ? ' · ' : '') + (p.R ? p.R + '▶' : '') || 'own';
+    const bTot = b.ok && !b.free ? b.coin + (b.opts[ui.pay] || b.opts[0]).L + (b.opts[ui.pay] || b.opts[0]).R : 0;
+    const bCost = b.ok ? (b.free ? (b.free === 'chain' ? 'chain' : 'free') : bTot ? bTot + '¢' : (c.res ? 'own' : 'free')) : '';
+    const wP = w.ok ? (w.opts[Math.min(ui.pay, w.opts.length - 1)] || w.opts[0]) : null;
+    const valOf = kind => { if (!ranked) return ''; const r = ranked.find(x => x.a.i === k && x.kind === kind); return r ? ' · ' + (r.v >= 0 ? '+' : '') + r.v.toFixed(1) : ''; };
+    const multi = (b.ok && !b.free && b.opts.length > 1) ? '<div class="pays">' + b.opts.slice(0, 5).map((p, j) => '<button data-pay="' + j + '" aria-pressed="' + (ui.pay === j) + '">' + payLabel(p) + '</button>').join('') + '</div>' : '';
+    return '<div class="head"><span class="cchip" style="background:' + A.COLOR_HEX[c.color] + '"></span><b>' + esc(c.name) + '</b><span class="grow"></span>' +
+      (ui.hint && ranked && ranked[0] ? '<span class="small">Hint: <b>' + hintWords(v, ranked[0]) + '</b></span>' : '') + '</div>' +
+      '<div class="tx">' + esc(Cd.effectText(c)) + (c.to.length ? '. Makes free later: ' + esc(c.to.join(', ')) : '') + (c.from.length ? '. Free if you have ' + esc(c.from.join(' or ')) : '') + '</div>' +
+      (store.settings.odds ? '<div class="odds">' + oddsFor(v, id) + '</div>' : '') + multi +
+      '<div class="btns">' +
+      '<button class="btn primary" data-do="build"' + (b.ok || o.oly ? '' : ' disabled') + '>Build<small>' + (b.ok ? bCost : o.oly ? 'free (wonder)' : esc(shortWhy(b.why))) + valOf(b.ok ? 'build' : 'oly') + '</small></button>' +
+      '<button class="btn" data-do="wonder"' + (w.ok ? '' : ' disabled') + '>Stage<small>' + (w.ok ? (wP.L + wP.R ? wP.L + wP.R + '¢' : 'own') : esc(shortWhy(w.why))) + valOf('wonder') + '</small></button>' +
+      '<button class="btn" data-do="sell">Sell<small>+3¢' + valOf('sell') + '</small></button></div>';
+  }
+  function shortWhy(w) { return !w ? 'no' : /coins/.test(w) ? 'coins' : /already/.test(w) ? 'have it' : /finished/.test(w) ? 'done' : 'resources'; }
+  function hintWords(v, r) { return (r.kind === 'sell' ? 'Sell ' : r.kind === 'wonder' ? 'Stage with ' : 'Build ') + esc(card(v, r.id).name); }
+
+  // ------------------------------------------------------------------ game input
+  function onGameClick(e) {
+    const t = e.target;
+    const v = table.view();
+    if (t.closest('#btn-hint')) { ui.hint = !ui.hint; if (ui.hint) { const r = rankNow(v); if (r[0] && ui.sel < 0) ui.sel = r[0].a.i; } renderGame(); return; }
+    if (t.closest('#btn-all')) { sheet('All cities', '<div style="display:flex;flex-direction:column;gap:6px">' + v.players.map((p, i) => playerRow(v, i)).join('') + '</div>'); return; }
+    if (t.closest('#btn-log')) { sheet('Log', logHTML(v)); return; }
+    if (t.closest('#btn-menu')) { menuSheet(); return; }
+    const city = t.closest('[data-city]');
+    if (city) { citySheet(v, Number(city.dataset.city)); return; }
+    const side = t.closest('[data-side]');
+    if (side) { doAct({ t: 'side', side: side.dataset.side }); return; }
+    const pk = t.closest('[data-pick]');
+    if (pk) { const k = Number(pk.dataset.pick); ui.sel = ui.sel === k ? -1 : k; ui.pay = 0; renderGame(); return; }
+    const dp = t.closest('[data-dpick]');
+    if (dp) { const k = Number(dp.dataset.dpick); ui.sel = ui.sel === k ? -1 : k; renderGame(); return; }
+    if (t.closest('[data-dbuild]')) { doAct({ t: 'discard', id: v.discardPile[ui.sel] }); return; }
+    if (t.closest('[data-dskip]')) { doAct({ t: 'discard', id: null }); return; }
+    const pay = t.closest('[data-pay]');
+    if (pay) { ui.pay = Number(pay.dataset.pay); renderGame(); return; }
+    const d = t.closest('[data-do]');
+    if (d && ui.sel >= 0) {
+      const k = ui.sel;
+      const o = E.options(v, ME, v.hand)[k];
+      let a;
+      if (d.dataset.do === 'sell') a = { t: 'sell', i: k };
+      else if (d.dataset.do === 'wonder') a = { t: 'wonder', i: k, pay: o.wonder.opts[Math.min(ui.pay, o.wonder.opts.length - 1)] };
+      else if (o.build.ok) a = { t: 'build', i: k, pay: o.build.opts[Math.min(ui.pay, o.build.opts.length - 1)] };
+      else a = { t: 'build', i: k, oly: true };
+      record(v, a);
+      doAct(a);
+    }
+  }
+  function record(v, a) {
+    // study mode: compare the choice with Hard's ranking at that moment
+    const r = rankNow(v);
+    if (!r.length) return;
+    const kind = a.t === 'build' ? (a.oly ? 'oly' : 'build') : a.t;
+    const mine = r.find(x => x.a.i === a.i && x.kind === kind) || r[r.length - 1];
+    const d = { age: v.age, turn: v.phase === 'seventh' ? 7 : v.turn, chose: { kind, id: v.hand[a.i] }, best: { kind: r[0].kind, id: r[0].id }, lost: +Math.max(0, r[0].v - mine.v).toFixed(2), n: v.hand.length };
+    if (table.online) ui.dec.push(d); else { store.game.dec = store.game.dec || []; store.game.dec.push(d); }
+  }
+  function doAct(a) {
+    if (net.busy) return;
+    if (table.online) {
+      net.busy = true;
+      table.act(a).then(r => { if (r && !r.ok) { net.busy = false; toast(r.message); renderGame(); } });
+      renderGame();
+      return;
+    }
+    try { table.act(a); } catch (err) { toast(err.message || 'Can’t do that'); }
+    resetSel();
+    const v = table.view();
+    if (v.phase === 'over') { saveLast(v, store.game.dec || []); }
+    renderGame();
+  }
+  function saveLast(v, dec) {
+    store.last = { view: v, dec, me: ME, when: Date.now() };
+    save();
+  }
+  function menuSheet() {
+    sheet('Game', '<div style="display:flex;flex-direction:column;gap:8px">' +
+      (table.online ? '<button class="btn" data-m="leave">Leave the room</button>' + (net.snap && net.snap.isHost ? '<button class="btn" data-m="close">End the room for everyone</button>' : '') :
+        '<button class="btn" data-m="quit">Quit this game</button>') +
+      '<p class="muted small" style="margin:0">Your game is saved on this phone after every move.</p></div>');
+    $('#sheet').addEventListener('click', e => {
+      const b = e.target.closest('[data-m]');
+      if (!b) return;
+      closeSheet();
+      if (b.dataset.m === 'quit') confirmBox('Quit this game? It can’t be resumed.', 'Quit', () => { table = null; store.game = null; save(); resetSel(); renderPlay(); });
+      if (b.dataset.m === 'leave') confirmBox('Leave the room? A computer takes your seat.', 'Leave', leaveOnline);
+      if (b.dataset.m === 'close') confirmBox('End the room for everyone?', 'End', () => { net.room.close(); leaveOnline(); });
+    });
+  }
+
+  // ------------------------------------------------------------------ end of game
+  const CATS = [['military', 'Military', 'red'], ['coins', 'Coins', 'yellow'], ['wonder', 'Wonder', null], ['civil', 'Civil', 'blue'], ['science', 'Science', 'green'], ['commerce', 'Commerce', 'yellow'], ['guilds', 'Guilds', 'purple']];
+  function scoreTable(v, me) {
+    const R = v.result;
+    const head = '<tr><th></th>' + v.players.map((p, i) => '<th title="' + esc(p.name) + '">' + esc(i === me ? 'You' : p.name.replace('Computer ', 'C')) + '</th>').join('') + '</tr>';
+    const rows = CATS.map(([k, label, col]) => '<tr><td><span class="rowl">' + (col ? A.chip(col) : A.stageIc()) + label + '</span></td>' + R.scores.map(s => '<td>' + s[k] + '</td>').join('') + '</tr>').join('');
+    const tot = '<tr class="tot"><td>Total</td>' + R.scores.map((s, i) => '<td class="' + (R.winners.indexOf(i) >= 0 ? 'win' : '') + '">' + s.total + '</td>').join('') + '</tr>';
+    return '<table class="sc"><thead>' + head + '</thead><tbody>' + rows + tot + '</tbody></table>';
+  }
+  function renderEnd(v) {
+    const R = v.result;
+    const won = R.winners.indexOf(ME) >= 0;
+    const place = 1 + R.scores.filter(s => s.total > R.scores[ME].total).length;
+    const dec = table.online ? ui.dec : (store.game && store.game.dec) || [];
+    const lost = dec.reduce((a, d) => a + d.lost, 0);
+    vPlay.innerHTML = '<div class="setup">' +
+      '<div class="panel popin" style="align-items:center;text-align:center;gap:2px"><div class="label">Game over</div><div style="font-size:24px;font-weight:850">' +
+      (won ? (R.winners.length > 1 ? 'Shared win!' : 'You win!') : esc(R.winners.map(w => nameOf(v, w)).join(' & ')) + ' win' + (R.winners.length > 1 ? '' : 's')) + '</div>' +
+      '<div class="muted small">You: ' + R.scores[ME].total + ' points · place ' + place + ' of ' + v.n + (dec.length ? ' · ' + lost.toFixed(1) + ' points lost vs Hard' : '') + '</div></div>' +
+      '<div class="panel scroll" style="overflow-x:auto">' + scoreTable(v, ME) + '</div>' +
+      '<div class="row"><button class="btn primary grow" data-end="new">New game</button><button class="btn grow" data-end="study">Study</button></div></div>';
+    vPlay.onclick = null;
+    $('[data-end="new"]', vPlay).addEventListener('click', () => {
+      if (table.online) { leaveOnline(); return; }
+      table = null; store.game = null; save(); renderPlay();
+    });
+    $('[data-end="study"]', vPlay).addEventListener('click', () => showTab('study', true));
+  }
+
+  // ================================================================== SCORE (real-table calculator)
+  const vScore = $('#v-score');
+  const SROWS = [['mil', 'Military', 'red'], ['coins', 'Coins', 'yellow'], ['wonder', 'Wonder', null], ['civil', 'Civil', 'blue'], ['commerce', 'Commerce', 'yellow'], ['guilds', 'Guilds', 'purple'],
+    ['compass', 'Compass', 'sci'], ['gear', 'Gear', 'sci'], ['tablet', 'Tablet', 'sci'], ['wild', 'Any symbol', 'sci']];
+  function scoreData() {
+    if (!store.score || !store.score.v) store.score = { n: store.settings.n, names: [], v: {} };
+    const s = store.score;
+    for (const [k] of SROWS) { s.v[k] = s.v[k] || []; }
+    return s;
+  }
+  function calc(s, i) {
+    const g = k => Number(s.v[k][i]) || 0;
+    const sci = E.sciBest({ compass: g('compass'), gear: g('gear'), tablet: g('tablet') }, g('wild'));
+    const coinPts = Math.floor(g('coins') / 3);
+    return { sci: sci.pts, add: sci.add, coinPts, total: g('mil') + coinPts + g('wonder') + g('civil') + g('commerce') + g('guilds') + sci.pts, coins: g('coins') };
+  }
+  function renderScore() {
+    const s = scoreData();
+    const n = s.n;
+    const cols = Array.from({ length: n }, (_, i) => i);
+    const icon = c => c === 'sci' ? '' : c ? A.chip(c) : A.stageIc();
+    const row = ([k, label, c]) => '<tr' + (c === 'sci' ? ' class="sub"' : '') + '><td>' + (c === 'sci' ? A.sci(k === 'wild' ? 'gear' : k).replace('class="ic"', 'class="ic s"') + ' ' : '<span class="rowl">' + icon(c) + ' ') + label + (c === 'sci' ? '' : '</span>') + '</td>' +
+      cols.map(i => '<td><input inputmode="numeric" pattern="-?[0-9]*" data-k="' + k + '" data-i="' + i + '" value="' + esc(s.v[k][i] == null ? '' : s.v[k][i]) + '" aria-label="' + label + ' player ' + (i + 1) + '"></td>').join('') + '</tr>';
+    vScore.innerHTML = '<div class="page">' +
+      '<div class="row"><span class="label grow">Score a real game</span>' + qBtn('Type each player\'s numbers from the table. Coins score 1 point per 3. Science is worked out for you: sets of three different symbols score 7, plus each symbol type squared; "any symbol" cards (Scientists Guild, Babylon) are placed for the most points. Ties go to the player with more coins.') +
+      '<div class="seg sm" data-sn style="width:190px">' + [3, 4, 5, 6, 7].map(k => '<button aria-pressed="' + (k === n) + '" data-v="' + k + '">' + k + '</button>').join('') + '</div></div>' +
+      '<div class="sgrid panel" style="padding:8px"><table class="calc"><thead><tr><th></th>' + cols.map(i => '<th><input class="nm" data-name="' + i + '" placeholder="P' + (i + 1) + '" value="' + esc(s.names[i] || '') + '" aria-label="Name ' + (i + 1) + '"></th>').join('') + '</tr></thead><tbody>' +
+      SROWS.slice(0, 6).map(row).join('') +
+      '<tr class="sub"><td>↳ coin points</td>' + cols.map(i => '<td class="out" data-out="coinPts" data-i="' + i + '"></td>').join('') + '</tr>' +
+      SROWS.slice(6).map(row).join('') +
+      '<tr class="sub"><td>↳ science</td>' + cols.map(i => '<td class="out" data-out="sci" data-i="' + i + '"></td>').join('') + '</tr>' +
+      '<tr class="tot"><td>Total</td>' + cols.map(i => '<td data-out="total" data-i="' + i + '"></td>').join('') + '</tr>' +
+      '</tbody></table></div>' +
+      '<div class="row"><span class="grow small muted" id="sc-win"></span><button class="btn small ghost" data-sclear>Clear</button></div></div>';
+    updateScore();
+  }
+  function updateScore() {
+    const s = scoreData();
+    const res = Array.from({ length: s.n }, (_, i) => calc(s, i));
+    vScore.querySelectorAll('[data-out]').forEach(el => {
+      const r = res[Number(el.dataset.i)];
+      const k = el.dataset.out;
+      el.textContent = k === 'sci' ? r.sci + (r.add.some(x => x) ? ' ★' : '') : r[k];
+      if (k === 'sci') el.title = r.add.some(x => x) ? 'Wildcards as compass +' + r.add[0] + ', gear +' + r.add[1] + ', tablet +' + r.add[2] : '';
+    });
+    const any = res.some(r => r.total);
+    let best = null;
+    res.forEach((r, i) => { if (!best || r.total > best.total || (r.total === best.total && r.coins > best.coins)) best = Object.assign({ i }, r); });
+    const winners = res.map((r, i) => i).filter(i => res[i].total === best.total && res[i].coins === best.coins);
+    vScore.querySelectorAll('[data-out="total"]').forEach(el => { el.style.color = any && winners.indexOf(Number(el.dataset.i)) >= 0 ? 'var(--accent-warm)' : ''; });
+    const nm = i => s.names[i] || 'P' + (i + 1);
+    const tie = res.filter(r => r.total === best.total).length > 1;
+    $('#sc-win').innerHTML = any ? 'Leader: <b style="color:var(--text)">' + esc(winners.map(nm).join(' & ')) + '</b>' + (tie && winners.length === 1 ? ' (more coins breaks the tie)' : '') : '';
+  }
+  vScore.addEventListener('input', e => {
+    const s = scoreData();
+    const el = e.target;
+    if (el.dataset.name != null) { s.names[Number(el.dataset.name)] = el.value.slice(0, 12); save(); updateScore(); return; }
+    if (!el.dataset.k) return;
+    const raw = el.value.replace(/[^0-9-]/g, '').slice(0, 4);
+    if (raw !== el.value) el.value = raw;
+    const num = raw === '' || raw === '-' ? null : Math.max(-99, Math.min(999, parseInt(raw, 10)));
+    s.v[el.dataset.k][Number(el.dataset.i)] = Number.isFinite(num) ? num : null;
+    save(); updateScore();
+  });
+  vScore.addEventListener('click', e => {
+    const b = e.target.closest('[data-sn] button');
+    if (b) { scoreData().n = Number(b.dataset.v); save(); renderScore(); return; }
+    if (e.target.closest('[data-sclear]')) confirmBox('Clear all the numbers?', 'Clear', () => { const n = scoreData().n; store.score = { n, names: store.score.names, v: {} }; save(); renderScore(); });
+  });
+
+  // ================================================================== ODDS
+  const vOdds = $('#v-odds');
+  function renderOdds() {
+    const tabs = [['cards', 'Cards'], ['draft', 'Draft'], ['science', 'Science'], ['military', 'Military'], ['hands', 'Hands']];
+    let body = '';
+    if (ui.oddsTab === 'cards') body = oddsCards();
+    else if (ui.oddsTab === 'draft') body = oddsDraft();
+    else if (ui.oddsTab === 'science') body = oddsScience();
+    else if (ui.oddsTab === 'military') body = oddsMilitary();
+    else body = oddsHands();
+    vOdds.innerHTML = '<div class="page"><div class="tabs2">' + tabs.map(([k, l]) => '<button data-ot="' + k + '" aria-pressed="' + (ui.oddsTab === k) + '">' + l + '</button>').join('') + '</div>' + body + '</div>';
+  }
+  const nSeg = () => '<div class="seg sm" data-on2="n">' + [3, 4, 5, 6, 7].map(k => '<button aria-pressed="' + (k === ui.oddsN) + '" data-v="' + k + '">' + k + 'p</button>').join('') + '</div>';
+  function oddsCards() {
+    const ed = store.settings.ed, n = ui.oddsN, age = ui.oddsAge;
+    const D = Cd.EDITIONS[ed];
+    const list = D.list.filter(c => c.age === age && c.color !== 'purple').sort((a, b) => Cd.COLORS.indexOf(a.color) - Cd.COLORS.indexOf(b.color) || a.name.localeCompare(b.name));
+    const cnt = (c, k) => c.players.filter(p => p <= k).length;
+    const deck = Cd.ageDeck(ed, age, n).length;
+    const rows = list.map(c => '<tr' + (cnt(c, n) ? '' : ' style="opacity:.4"') + '><td>' + A.chip(c.color) + ' ' + esc(c.name) + '</td>' + [3, 4, 5, 6, 7].map(k => '<td' + (k === n ? ' style="color:var(--text);font-weight:800"' : ' class="muted"') + '>' + (cnt(c, k) || '·') + '</td>').join('') +
+      '<td>' + (cnt(c, n) ? Math.round(100 * (1 - hyper0(deck, cnt(c, n), 7))) + '%' : '–') + '</td></tr>').join('');
+    const g = age === 3 ? '<p class="small muted" style="margin:0">Guilds: <b style="color:var(--text)">' + (n + 2) + '</b> of the 10 are shuffled into Age III, so each guild is in the game <b style="color:var(--text)">' + Math.round(100 * (n + 2) / 10) + '%</b> of the time.</p>' : '';
+    return '<div class="row">' + nSeg() + '</div><div class="seg sm" data-on2="age">' + [1, 2, 3].map(a => '<button aria-pressed="' + (a === age) + '" data-v="' + a + '">Age ' + AGE[a] + '</button>').join('') + '</div>' + g +
+      '<div class="panel scroll" style="flex:1;padding:6px 8px"><table class="dt"><thead><tr><th>Card · copies by players</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>In 1st hand ' + qBtn('Chance at least one copy is in your opening hand of 7 this age, with ' + n + ' players (' + deck + ' cards dealt).') + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+  function hyper0(N, K, n) { // chance none of K copies is in a hand of n from N
+    let p = 1;
+    for (let i = 0; i < n; i++) p *= (N - K - i) / (N - i);
+    return Math.max(0, p);
+  }
+  function oddsDraft() {
+    const D = window.SWDraft;
+    const ed = store.settings.ed;
+    if (!D || !D.ed[ed]) return '<p class="muted">No simulation data.</p>';
+    const rows = Object.entries(D.ed[ed]).filter(([, r]) => r.built > 20);
+    const k = ui.draftSort;
+    rows.sort((a, b) => (b[1][k] || 0) - (a[1][k] || 0));
+    const col = name => A.chip(Cd.EDITIONS[ed].byName[name].color);
+    const games = D.gamesPerCount * D.counts.length;
+    const th = (key, label) => '<th data-ds="' + key + '"' + (k === key ? ' style="color:var(--accent)"' : '') + '>' + label + (k === key ? ' ▾' : '') + '</th>';
+    return '<p class="small muted" style="margin:0">From ' + games.toLocaleString() + ' Hard-vs-Hard games (3–7 players). ' + qBtn('Take = how often Hard builds the card when it is in the hand. Win = how often the players who built it won, compared with a fair share (1.00 = average). Pts = their points minus the table average. Strong cards are taken early and go with wins; it is correlation, not proof.') + '</p>' +
+      '<div class="panel scroll" style="flex:1;padding:6px 8px"><table class="dt"><thead><tr><th>Card</th>' + th('take', 'Take') + th('win', 'Win') + th('pts', 'Pts') + '</tr></thead><tbody>' +
+      rows.map(([name, r]) => '<tr><td>' + col(name) + ' ' + esc(name) + '</td><td>' + Math.round(100 * r.take) + '%</td><td style="color:' + heat(r.win, 0.7, 1.4) + '">' + r.win.toFixed(2) + '</td><td style="color:' + heat(r.pts, -3, 4) + '">' + (r.pts >= 0 ? '+' : '') + r.pts.toFixed(1) + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+  function oddsScience() {
+    const [a, b, c, w] = ui.sci;
+    const best = E.sciBest({ compass: a, gear: b, tablet: c }, w);
+    const next = ['compass', 'gear', 'tablet'].map((k, j) => { const x = [a, b, c]; x[j]++; return E.sciBest({ compass: x[0], gear: x[1], tablet: x[2] }, w).pts - best.pts; });
+    const wildNext = E.sciBest({ compass: a, gear: b, tablet: c }, w + 1).pts - best.pts;
+    const step = (j, label, ic) => '<div class="row"><span class="grow">' + ic + ' ' + label + '</span><span class="stepper"><button data-sci="' + j + '" data-d="-1">−</button><b>' + ui.sci[j] + '</b><button data-sci="' + j + '" data-d="1">+</button></span><span class="small muted" style="width:52px;text-align:right">' + (j < 3 ? 'next +' + next[j] : 'next +' + wildNext) + '</span></div>';
+    return '<div class="twocol"><div class="panel" style="display:flex;flex-direction:column;gap:8px">' +
+      step(0, 'Compass', A.sci('compass')) + step(1, 'Gear', A.sci('gear')) + step(2, 'Tablet', A.sci('tablet')) + step(3, 'Any symbol', A.wild()) +
+      '<div class="row"><span class="grow label">Science points</span><span class="bigval">' + best.pts + '</span></div>' +
+      (w ? '<p class="small muted" style="margin:0">Best use of the wildcards: compass +' + best.add[0] + ', gear +' + best.add[1] + ', tablet +' + best.add[2] + '.</p>' : '') + '</div>' +
+      '<div class="panel small"><div class="label" style="margin-bottom:6px">Why science snowballs ' + qBtn('Each symbol type scores its count squared, and every full set of three different symbols adds 7. So the 4th copy of one symbol is worth 7 points on its own, and finishing a set is worth 7 plus the square growth.') + '</div>' +
+      '<table class="dt"><thead><tr><th>Symbols</th><th>Points</th><th>Per card</th></tr></thead><tbody>' +
+      [[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 0, 0], [3, 2, 1], [4, 2, 1], [5, 2, 2]].map(x => { const p = E.sciScore(x[0], x[1], x[2]); return '<tr><td>' + x.join(' / ') + '</td><td>' + p + '</td><td>' + (p / (x[0] + x[1] + x[2])).toFixed(1) + '</td></tr>'; }).join('') +
+      '</tbody></table></div></div>';
+  }
+  function oddsMilitary() {
+    const m = ui.mil || (ui.mil = { me: 3, l: 2, r: 4, age: 2 });
+    const win = { 1: 1, 2: 3, 3: 5 }[m.age];
+    const res = x => (m.me > x ? '+' + win : m.me < x ? '−1' : '0');
+    const tot = [m.l, m.r].reduce((a, x) => a + (m.me > x ? win : m.me < x ? -1 : 0), 0);
+    const step = (k, label) => '<div class="row"><span class="grow">' + label + '</span><span class="stepper"><button data-mil="' + k + '" data-d="-1">−</button><b>' + m[k] + '</b><button data-mil="' + k + '" data-d="1">+</button></span></div>';
+    return '<div class="twocol"><div class="panel" style="display:flex;flex-direction:column;gap:8px">' +
+      '<div class="seg sm" data-on2="milage">' + [1, 2, 3].map(a => '<button aria-pressed="' + (a === m.age) + '" data-v="' + a + '">End of Age ' + AGE[a] + '</button>').join('') + '</div>' +
+      step('l', '◀ Left shields') + step('me', A.shield() + ' Your shields') + step('r', 'Right shields ▶') +
+      '<div class="row"><span class="grow">Left: <b>' + res(m.l) + '</b> · Right: <b>' + res(m.r) + '</b></span><span class="bigval" style="color:' + heat(tot, -2, 10) + '">' + (tot > 0 ? '+' : '') + tot + '</span></div></div>' +
+      '<div class="panel small"><div class="label" style="margin-bottom:6px">Tokens per age ' + qBtn('After each age you compare shields with each neighbour separately. More shields wins a token worth 1, 3 or 5 points by age; fewer loses 1 point; a tie gives nothing. Shields carry over between ages.') + '</div>' +
+      '<table class="dt"><thead><tr><th></th><th>Win</th><th>Loss</th><th>Swing</th></tr></thead><tbody>' +
+      [1, 2, 3].map(a => '<tr><td>Age ' + AGE[a] + '</td><td>+' + { 1: 1, 2: 3, 3: 5 }[a] + '</td><td>−1</td><td>' + ({ 1: 1, 2: 3, 3: 5 }[a] + 1) + '</td></tr>').join('') +
+      '<tr><td>Most possible</td><td>+18</td><td>−6</td><td>24</td></tr></tbody></table>' +
+      '<p class="muted" style="margin:8px 0 0">One shield more than a neighbour in Age III is worth up to 6 points against that neighbour alone.</p></div></div>';
+  }
+  function oddsHands() {
+    const n = ui.oddsN;
+    const L = 'ABCDEFG';
+    const rows = [1, 2, 3, 4, 5, 6].map(t => { const h = (t - 1) % n; return '<tr><td>Turn ' + t + '</td><td><b>' + L[h] + '</b></td><td>' + (8 - t) + '</td><td>' + (t > n ? 'again (' + (t - n) + ' → ' + t + ')' : 'first look') + '</td></tr>'; }).join('');
+    const twice = Math.max(0, 6 - n);
+    return '<div class="row">' + nSeg() + '</div>' +
+      '<div class="twocol"><div class="panel scroll" style="padding:6px 8px"><table class="dt"><thead><tr><th>Turn</th><th>Hand</th><th>Cards</th><th>Seen</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="panel small"><p style="margin:0">With <b>' + n + '</b> players a hand comes back after <b>' + n + '</b> turns. ' +
+      (twice ? 'You see <b>' + twice + '</b> hand' + (twice > 1 ? 's' : '') + ' twice each age: what you leave in them may come back to you.' : 'You never see a hand twice, so anything you pass is gone.') + '</p>' +
+      '<p class="muted" style="margin:8px 0 0">' + qBtn('A card you pass reaches your next neighbour first (left in Ages I and III, right in Age II). If it is a strong card for them, taking it yourself, even to sell or to build a wonder stage, is called hate drafting. The game screen tells you whether the next player can build the card you are looking at.') + ' Passing direction: Age I ◀, Age II ▶, Age III ◀.</p></div></div>';
+  }
+  vOdds.addEventListener('click', e => {
+    const t = e.target;
+    const ot = t.closest('[data-ot]');
+    if (ot) { ui.oddsTab = ot.dataset.ot; renderOdds(); return; }
+    const o2 = t.closest('[data-on2] button');
+    if (o2) {
+      const k = o2.parentElement.dataset.on2;
+      if (k === 'n') ui.oddsN = Number(o2.dataset.v);
+      else if (k === 'age') ui.oddsAge = Number(o2.dataset.v);
+      else if (k === 'milage') ui.mil.age = Number(o2.dataset.v);
+      renderOdds(); return;
+    }
+    const ds = t.closest('[data-ds]');
+    if (ds) { ui.draftSort = ds.dataset.ds; renderOdds(); return; }
+    const sc = t.closest('[data-sci]');
+    if (sc) { const j = Number(sc.dataset.sci); ui.sci[j] = Math.max(0, Math.min(12, ui.sci[j] + Number(sc.dataset.d))); renderOdds(); return; }
+    const ml = t.closest('[data-mil]');
+    if (ml) { const k = ml.dataset.mil; ui.mil[k] = Math.max(0, Math.min(25, ui.mil[k] + Number(ml.dataset.d))); renderOdds(); return; }
+  });
+
+  // ================================================================== STUDY
+  const vStudy = $('#v-study');
+  function renderStudy() {
+    const L = store.last;
+    if (!L || !L.view || !L.view.result) {
+      vStudy.innerHTML = '<div class="page"><div class="panel"><b>No finished game yet</b><p class="muted small" style="margin:6px 0 0">Play a game to the end. Every pick you make is compared with what the Hard computer would have picked, and the points you gave up are added up here.</p></div></div>';
+      return;
+    }
+    const v = L.view, me = L.me || 0, dec = L.dec || [];
+    const R = v.result;
+    const lost = dec.reduce((a, d) => a + d.lost, 0);
+    const same = dec.filter(d => d.lost < 0.05).length;
+    const byAge = [1, 2, 3].map(a => dec.filter(d => d.age === a).reduce((s, d) => s + d.lost, 0));
+    const word = d => (d.kind === 'sell' ? 'Sell ' : d.kind === 'wonder' ? 'Stage: ' : '') + esc(E.card(v, d.id).name);
+    const rows = dec.map(d => '<tr><td class="muted">' + AGE[d.age] + '·' + d.turn + '</td><td>' + word(d.chose) + '</td><td>' + (d.lost < 0.05 ? '<span class="ok">same</span>' : word(d.best)) + '</td><td style="color:' + heat(-d.lost, -3, 0) + '">' + (d.lost < 0.05 ? '0' : '−' + d.lost.toFixed(1)) + '</td></tr>').join('');
+    vStudy.innerHTML = '<div class="page"><div class="twocol" style="flex:1;min-height:0">' +
+      '<div style="display:flex;flex-direction:column;gap:8px;min-height:0">' +
+      '<div class="panel"><div class="row"><span class="label grow">Your last game</span>' + qBtn('Points lost = how many points (Hard\'s estimate) your pick was worth less than Hard\'s favourite pick in the same spot. It is an estimate, not the truth: Hard can be wrong too.') + '</div>' +
+      '<div class="row" style="gap:16px;margin-top:6px;flex-wrap:wrap"><div><div class="bigval">' + R.scores[me].total + '</div><div class="small muted">points · place ' + (1 + R.scores.filter(s => s.total > R.scores[me].total).length) + '/' + v.n + '</div></div>' +
+      '<div><div class="bigval" style="color:' + heat(-lost, -15, 0) + '">' + lost.toFixed(1) + '</div><div class="small muted">points lost</div></div>' +
+      '<div><div class="bigval">' + (dec.length ? Math.round(100 * same / dec.length) : 0) + '%</div><div class="small muted">same as Hard</div></div></div>' +
+      '<div class="small muted" style="margin-top:6px">Lost by age: ' + byAge.map((x, i) => 'Age ' + AGE[i + 1] + ' <b style="color:var(--text)">' + x.toFixed(1) + '</b>').join(' · ') + '</div></div>' +
+      '<div class="panel scroll" style="overflow-x:auto">' + scoreTable(v, me) + '</div></div>' +
+      '<div class="panel scroll" style="min-height:0;padding:6px 8px">' + (dec.length ? '<table class="dt"><thead><tr><th>Turn</th><th>You</th><th>Hard</th><th>Lost</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="muted small">No picks recorded for this game.</p>') + '</div>' +
+      '</div></div>';
+  }
+
+  // ================================================================== SETTINGS
+  const vSet = $('#v-settings');
+  function renderSettings() {
+    const s = store.settings;
+    const sw = (k, label, sub) => '<div class="setrow"><div class="grow"><b>' + label + '</b><span>' + sub + '</span></div><label class="switch"><input type="checkbox" data-sw="' + k + '"' + (s[k] ? ' checked' : '') + '><span></span></label></div>';
+    vSet.innerHTML = '<div class="set scroll">' +
+      '<div class="panel"><div class="row"><span class="label grow">Edition</span>' + qBtn('1st edition (2010) is the default and is checked card by card against the published rulebook. 2nd edition (2020) changes some costs, points and wonder boards, and swaps a few cards (Well for Pawnshop, Decorators for Strategists). Details: docs/rules-check.md.') + '</div>' +
+      '<div class="seg" data-ed style="margin-top:8px"><button aria-pressed="' + (s.ed === 1) + '" data-v="1">1st edition</button><button aria-pressed="' + (s.ed === 2) + '" data-v="2">2nd edition</button></div></div>' +
+      '<div class="panel"><div class="row"><span class="label grow">Wonder sides</span>' + qBtn('The 1st-edition rules deal each wonder with a random side; the 2nd edition lets everyone choose. Rulebook default follows your edition. Side A is easier; side B is trickier.') + '</div>' +
+      '<div class="seg sm" data-sides style="margin-top:8px">' + [['default', 'Rulebook'], ['random', 'Random'], ['choose', 'Choose'], ['A', 'All A'], ['B', 'All B']].map(([k, l]) => '<button aria-pressed="' + (s.sides === k) + '" data-v="' + k + '">' + l + '</button>').join('') + '</div></div>' +
+      '<div class="panel">' + sw('values', 'Card values', 'Hard’s points estimate on every card') + sw('odds', 'Odds line', 'Hand comes back, next player, copies') + '</div>' +
+      '<div class="panel"><div class="setrow"><div class="grow"><b>Online play</b><span>Friends on their own phones, any mix with computers.</span></div><button class="btn small" data-online>Open</button></div></div>' +
+      '<div class="panel"><div class="setrow"><div class="grow"><b>Reset</b><span>Clears the saved game, last game, scores and settings.</span></div><button class="btn small" data-reset>Reset</button></div></div>' +
+      '<p class="ver">7 Wonders Lab ' + VERSION + ' · <a href="../">more board &amp; card games</a><br>Fan-made study tool, not affiliated with the publisher. Art drawn for this site.</p>' +
+      '</div>';
+  }
+  vSet.addEventListener('click', e => {
+    const b = e.target.closest('[data-ed] button');
+    if (b) { store.settings.ed = Number(b.dataset.v); save(); renderSettings(); if (table && !table.online) toast('Applies to your next game'); return; }
+    const sd = e.target.closest('[data-sides] button');
+    if (sd) { store.settings.sides = sd.dataset.v; save(); renderSettings(); return; }
+    if (e.target.closest('[data-online]')) { if (!table) ui.online = true; showTab('play', true); if (table && !table.online) toast('Finish or quit the current game first'); return; }
+    if (e.target.closest('[data-reset]')) confirmBox('Clear everything saved on this device?', 'Reset', () => {
+      try { localStorage.removeItem(KEY); } catch (err) { /* ignore */ }
+      location.reload();
+    });
+  });
+  vSet.addEventListener('change', e => { const k = e.target.dataset.sw; if (k) { store.settings[k] = e.target.checked; save(); } });
+
+  // ------------------------------------------------------------------ boot
+  const start = (location.hash || '').slice(1);
+  if (['play', 'score', 'odds', 'study', 'settings'].indexOf(start) >= 0) ui.tab = start;
+  try { history.replaceState({ tab: ui.tab }, '', '#' + ui.tab); } catch (e) { /* ignore */ }
+  showTab(ui.tab, false);
+  if (store.online) {
+    ui.online = true; net.connecting = true; renderPlay();
+    loadOnline().then(r => r.resume()).then(ok => {
+      net.connecting = false;
+      if (!ok) { store.online = false; ui.online = false; save(); }
+      renderPlay();
+    }).catch(() => { net.connecting = false; renderPlay(); });
+  }
+  window.SWApp = { store, get table() { return table; }, act: a => doAct(a), net, version: VERSION, ui };
+})();
