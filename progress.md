@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → CLAUDE.md → docs/rules-check.md → docs/ideas.md → chat.md.
-Last updated: 2026-10-20 (first build, QA round, visual design pass, then sounds + effects).
+Last updated: 2026-10-20 (first build, QA round, visual design pass, sounds + effects, then the real-table look).
 Live: https://timothyhadfield.github.io/seven-wonders/ · Repo: https://github.com/TimothyHadfield/seven-wonders
 
 ## Goal right now
@@ -22,7 +22,7 @@ Live: https://timothyhadfield.github.io/seven-wonders/ · Repo: https://github.c
 | QA pass (2026-10-20, fresh agent, evidence in the session scratchpad sw-qa/) | No blockers. 7 findings fixed: Back mid-game/sheet/lobby, Gizah B stage box overflow, Score clamps/caps and box = count, corrupt saved sections reset one at a time, text player count. Re-checked by a 27-check headless script that fails 18/26 on the old build and passes 27/27 on the fix. |
 | Visual design pass (2026-10-20, Tim: "review them again for design improvements especially visually") | Done. Phone: hand cards fill the spare height (178 px tall in Age I, ~124 in Age III, were 134), action panel fixed at 180 px so picking a card moves nothing, Build/Stage/Sell pinned at its bottom. Laptop: all 7 cards fit (were clipped at both edges), 88×156 cards, action panel no longer a big empty box. Card faces shaded; unaffordable cards greyed by filter, not opacity; no mid-word name splits ("Worksho-p"). Bigger stage strip, emblem and top buttons; Score/Odds sticky cells match their panel; Score table sized to content on laptop. Screenshots before/after in the session scratchpad `design/seven-wonders/`. |
 | Sounds, celebrations, animations (2026-10-20) | Done. `js/fx.js` = byte copy of `../_fx/fx.js` (never edit); game events in `js/sfx.js` (a diff of the last view vs the new one, so local and online sound the same); Settings tab has a "Sound & effects" panel (fx.js rows restyled to the game's own switch/seg look via `#fx-panel` CSS). Tests: `node tests/fx.test.mjs` (13, scripted 3-player game) and `node tools/fx-check.mjs <url>` (WebKit, fake audio, plays a whole game by tapping). Both seen failing on the old build. |
-
+| Real-table look (2026-10-20) | Done. Wood table; your seat at the bottom: built cards in overlapped colour columns, coin pile + shield, your wonder board with stage boxes (a built stage shows the tucked card edge), hand as a fan of 65:100 cards (banner, cost strip, picture, name scroll; original SVG art) dealt from the age deck with a flip. Neighbours left/right with board, columns, card backs fanned and trade prices; other seats small across the top; centre = next age decks (thinning stacks) + face-down discard pile. Laptop: Log/Cities side panel. Research in session scratchpad `table/seven-wonders/real.md`, before/after shots beside it. Kit: `css/table.css` + `js/table.js` = byte copies of `../_table/` (never edit). |
 **Event → sound map** (computers' reveals at 45% volume, panned by seat; times wait for your card's 320 ms flight):
 | Event | Sound | Animation |
 |---|---|---|
@@ -50,6 +50,7 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 ## Standing instructions (Tim's words)
 - "add risk, clue, battleship, connect four, stratego, clue, checkers, pandemic, splendor, king of tokyo, 7 wonders, and evolution to the list of games."
 - "add opptional sounds you can add to the games that reflect what's happening in the game accurately as well as win celebrations, and other fun annimations to go along with everything. Just make sure everything is customizable in the settings so the user can play as preffered." (2026-10-20)
+- "could you also make sure that each of the games also have a look to them so that the game (either board or card layout) looks almost identical to how the board or card layout looks like in real life, so it's easy to understand if you've already played it before, and also so it feels more like you're actually playing in real life rather than you're playing it online. Even things like how youre cards or other things are laid out infront of you, make it look like they are actual cards laid out similar to how it looks like in real life. Make the decks look like actual decks. Make the board have the same design as it does in real life with the same layouts. It should look kind of like you're looking through a camera that is connected to a user's glasses that is playing in real life (not actually, but the layout and style of everything should be similar)." (2026-10-20)
 - Common brief: exact rules and card counts, original art only, $0, phone-first with a real laptop layout, no page scroll on main screens, bottom tabs on phone, "?" explains why, choices in Settings, odds at the point of decision, measured computers behind "How strong?".
 
 ## Traps
@@ -62,6 +63,10 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - `js/fx.js` is a COPY of `../_fx/fx.js`. Never edit it; custom sounds go in `js/sfx.js` via `FX.define`.
 - fx.js's own switch CSS is green and loads after the page CSS; `#fx-panel` rules in index.html put the game's blue switch back. Keep them.
 - Port 47613 was taken by another agent's server (served Clue) on 10-20; fx work used 58194.
+- `css/table.css`, `js/table.js` are COPIES of `../_table/`. Never edit them.
+- Hand fan (`layoutHand` in app.js): lay out under `.tbl-instant`, force a reflow, then lift the picked card in a rAF, else freshly rendered cards slide in from x=0 and look stacked.
+- Seats use `data-nb="L|R"`, never `data-side` (that attribute is the wonder side picker; a clash made seat taps send a side move).
+- Name chips are `.mcn/.citynames`; `.mc` is a built-card banner in the colour columns.
 - Local test servers used port 47391 (8765/8791 were taken by other agents).
 
 ## Decisions
@@ -81,6 +86,7 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - Top-bar icon buttons are 36×38 on phone (40 would overflow the status row with 2-digit coins and points).
 - Sounds heard by a human: tests run with a fake AudioContext (WebKit on Windows has no Web Audio), so loudness/feel of `clash` and `stage` is unheard. Online sounds checked in node (plan) only, not with two browsers.
 - Storage blocked with fx: reasoned (fx.js wraps every storage call), not measured here.
+- Table look: the required second-opinion reviewer could not run (subagent limit hit); the look was self-reviewed against real.md only. Setup screen at 659×393 landscape still scrolls (same as before).
 - 2nd-edition rules are checked against app data and rulespal, not an official 2nd-edition PDF.
 
 ## Rejected / parked
