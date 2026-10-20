@@ -27,6 +27,18 @@
       if (s && s.v === 1) {
         const out = Object.assign(fresh(), s, { settings: Object.assign(fresh().settings, s.settings || {}) });
         const st = out.settings, def = fresh().settings;
+        st.ed = Number(st.ed); st.n = Number(st.n);
+        // each section is checked on its own; a bad one is reset without touching the rest
+        const L = out.last;
+        const okLast = L && typeof L === 'object' && L.view && Array.isArray(L.view.players) && L.view.players.length >= 3 &&
+          L.view.result && Array.isArray(L.view.result.scores) && L.view.result.scores.length === L.view.players.length &&
+          L.view.result.scores.every(x => x && Number.isFinite(x.total)) &&
+          Array.isArray(L.view.result.winners) && [1, 2].includes(L.view.ed) && Number.isInteger(L.me) && L.me >= 0 && L.me < L.view.players.length;
+        if (!okLast) out.last = null;
+        else L.dec = Array.isArray(L.dec) ? L.dec.filter(d => d && Number.isFinite(d.lost) && d.chose && d.best) : [];
+        if (out.score != null && (typeof out.score !== 'object' || Array.isArray(out.score))) out.score = null;
+        if (out.game != null && (typeof out.game !== 'object' || !out.game.state)) out.game = null;
+        if (out.game && !Array.isArray(out.game.dec)) out.game.dec = [];
         if (![1, 2].includes(st.ed)) st.ed = def.ed;
         if (!['default', 'random', 'choose', 'A', 'B'].includes(st.sides)) st.sides = def.sides;
         if (!['easy', 'medium', 'hard'].includes(st.level)) st.level = def.level;
@@ -71,7 +83,7 @@
     net.snap = snap;
     net.busy = false;
     if (snap.status === 'playing' || snap.status === 'finished') {
-      if (!table || !table.online) { table = new OnlineTable(); resetSel(); net.savedLast = false; ui.dec = []; }
+      if (!table || !table.online) { table = new OnlineTable(); resetSel(); net.savedLast = false; ui.dec = []; guard('game'); }
       ME = snap.mySeat >= 0 ? snap.mySeat : 0;
       if (snap.status === 'finished' && snap.pub && !net.savedLast) { net.savedLast = true; saveLast(table.view(), ui.dec || []); }
     } else if (table && table.online) backToLocal();
@@ -114,15 +126,27 @@
     });
     document.body.appendChild(back);
   }
+  // History: Back closes a sheet, leaves the lobby for setup, and never leaves the site mid-game.
+  // Entries carry g: 'game' | 'lobby' for the layer they belong to, and sheet: 1 while a sheet is open.
+  function hist(state) { try { history.pushState(state, '', '#' + state.tab); } catch (e) { /* file:// */ } }
+  function layer() { return table ? 'game' : ui.online ? 'lobby' : undefined; }
+  function guard(g) { const h = history.state || {}; if (h.g !== g || h.sheet) hist({ tab: 'play', g }); }
   function sheet(title, html) {
-    closeSheet();
+    const had = !!$('#sheet');
+    closeSheet(true);
+    if (!had) hist(Object.assign({ tab: ui.tab }, history.state || {}, { sheet: 1 }));
     const back = document.createElement('div');
     back.className = 'sheet-back'; back.id = 'sheet';
     back.innerHTML = '<div class="sheet"><div class="row"><h3 class="grow">' + esc(title) + '</h3><button class="btn small ghost" data-close>Close</button></div><div class="scroll">' + html + '</div></div>';
     back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) closeSheet(); });
     document.body.appendChild(back);
   }
-  function closeSheet() { const s = $('#sheet'); if (s) s.remove(); }
+  function closeSheet(quiet) {
+    const s = $('#sheet');
+    if (!s) return;
+    s.remove();
+    if (!quiet && history.state && history.state.sheet) try { history.back(); } catch (e) { /* ignore */ }
+  }
   const card = (g, id) => E.card(g, id);
   const nameOf = (v, s) => (s === ME ? 'You' : v.players[s].name);
   const wname = (v, p) => Cd.EDITIONS[v.ed].wonders[p.wonder].name;
@@ -132,13 +156,23 @@
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(b.dataset.tab, true); });
   function showTab(tab, push) {
     ui.tab = tab;
-    closeSheet();
+    closeSheet(true);
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + tab));
-    if (push) try { history.pushState({ tab }, '', '#' + tab); } catch (e) { /* file:// */ }
+    if (push) hist({ tab, g: layer() });
     render();
   }
-  window.addEventListener('popstate', e => { showTab((e.state && e.state.tab) || 'play', false); });
+  window.addEventListener('popstate', e => {
+    const s = e.state || { tab: 'play' };
+    if ($('#sheet')) { closeSheet(true); if (s.tab === ui.tab) return; }
+    if (table && !s.g) { guard('game'); showTab('play', false); return; }  // mid-game: Back stays in the game
+    if (!table && ui.online && !s.g) {
+      const st = net.snap && net.snap.status;
+      if (st === 'lobby' || st === 'joining') { guard('lobby'); showTab('play', false); confirmBox('Leave this room?', 'Leave', leaveOnline); return; }
+      ui.online = false;
+    }
+    showTab(s.tab || 'play', false);
+  });
   document.addEventListener('click', e => {
     const old = $('.pop');
     const q = e.target.closest('[data-q]');
@@ -154,11 +188,15 @@
     if (y + h > window.innerHeight - 8) y = r.top - h - 8;
     pop.style.left = x + 'px'; pop.style.top = Math.max(8, y) + 'px';
   });
+  // a saved section that still breaks its screen is reset on its own (the rest of the save is kept)
+  function safely(fn, reset) {
+    try { fn(); } catch (e) { reset(); save(); fn(); }
+  }
   function render() {
     if (ui.tab === 'play') renderPlay();
-    else if (ui.tab === 'score') renderScore();
+    else if (ui.tab === 'score') safely(renderScore, () => { store.score = null; });
     else if (ui.tab === 'odds') renderOdds();
-    else if (ui.tab === 'study') renderStudy();
+    else if (ui.tab === 'study') safely(renderStudy, () => { store.last = null; });
     else renderSettings();
   }
 
@@ -208,6 +246,7 @@
     save();
     table = new LocalTable(store.game);
     ME = 0; resetSel(); ui.prevKey = ''; ui.prevCities = null;
+    guard('game');
     renderPlay();
   }
   vPlay.addEventListener('click', e => {
@@ -230,10 +269,12 @@
 
   // ------------------------------------------------------------------ online lobby
   async function onlineBtn(k) {
-    if (k === 'open') { ui.online = true; renderPlay(); loadOnline().catch(() => toast('Online play couldn’t load. Check your internet.')); return; }
+    if (k === 'open') { ui.online = true; guard('lobby'); renderPlay(); loadOnline().catch(() => toast('Online play couldn’t load. Check your internet.')); return; }
     if (k === 'back') {
       if (net.snap && net.snap.status === 'lobby') { confirmBox('Leave this room?', 'Leave', leaveOnline); return; }
-      ui.online = false; renderPlay(); return;
+      ui.online = false; renderPlay();
+      if (history.state && history.state.g === 'lobby') try { history.back(); } catch (e) { /* ignore */ }
+      return;
     }
     if (k === 'start') {
       if (net.connecting) return;
@@ -324,7 +365,12 @@
   function stagesHTML(v, p, big) {
     const all = E.stagesOf(v, p);
     if (!all.length) return '<span class="muted small">Side not chosen</span>';
-    return all.map((s, k) => '<div class="stg ' + (k < p.stages ? 'built' : k === p.stages ? 'next' : '') + '" title="' + esc(Cd.stageText(s)) + '">' +
+    // each box gets room in proportion to what it shows, so a long cost (Gizah B: 4 stone + papyrus) fits
+    const eff = e => (e.vp ? 1.4 : 0) + (e.sh || 0) + (e.coins ? 1.4 : 0) + (e.any ? 3 : 0) + (e.wild ? 1 : 0) +
+      (e.free || e.discard || e.seventh || e.copy ? 3.2 : 0) + (e.tradeRaw ? 3.5 : 0);
+    const grow = (s, k) => (k < p.stages ? 0 : String(s[0] || '').length + 1) + Math.max(1, eff(s[1] || {}));
+    return all.map((s, k) => '<div class="stg ' + (k < p.stages ? 'built' : k === p.stages ? 'next' : '') + (k >= p.stages && String(s[0] || '').length >= 4 ? ' tight' : '') +
+      '" style="flex-grow:' + grow(s, k) + '" title="' + esc(Cd.stageText(s)) + '">' +
       (k < p.stages ? '' : A.resCost(s[0]) + '<b class="arr">›</b>') + A.stageEffect(s) + '</div>').join('');
   }
   function milSum(p) { return p.mil.reduce((a, b) => a + b, 0); }
@@ -624,10 +670,20 @@
   const vScore = $('#v-score');
   const SROWS = [['mil', 'Military', 'red'], ['coins', 'Coins', 'yellow'], ['wonder', 'Wonder', null], ['civil', 'Civil', 'blue'], ['commerce', 'Commerce', 'yellow'], ['guilds', 'Guilds', 'purple'],
     ['compass', 'Compass', 'sci'], ['gear', 'Gear', 'sci'], ['tablet', 'Tablet', 'sci'], ['wild', 'Any symbol', 'sci']];
+  // [min, max] per row: military can go to -6 (six defeats), everything else starts at 0
+  const SCAP = { mil: [-6, 18], coins: [0, 199], wonder: [0, 40], civil: [0, 99], commerce: [0, 99], guilds: [0, 99], compass: [0, 20], gear: [0, 20], tablet: [0, 20], wild: [0, 3] };
   function scoreData() {
-    if (!store.score || !store.score.v) store.score = { n: store.settings.n, names: [], v: {} };
-    const s = store.score;
-    for (const [k] of SROWS) { s.v[k] = s.v[k] || []; }
+    let s = store.score;
+    if (!s || typeof s !== 'object' || !s.v || typeof s.v !== 'object' || Array.isArray(s.v)) s = store.score = { n: store.settings.n, names: [], v: {} };
+    s.n = Number(s.n);
+    if (!(s.n >= 3 && s.n <= 7) || s.n !== Math.floor(s.n)) s.n = store.settings.n;
+    if (!Array.isArray(s.names)) s.names = [];
+    s.names = s.names.map(x => typeof x === 'string' ? x.slice(0, 12) : '');
+    for (const [k] of SROWS) {
+      if (!Array.isArray(s.v[k])) s.v[k] = [];
+      const [lo, hi] = SCAP[k];
+      s.v[k] = s.v[k].map(x => x == null || !Number.isFinite(Number(x)) ? null : Math.max(lo, Math.min(hi, Math.round(Number(x)))));
+    }
     return s;
   }
   function calc(s, i) {
@@ -679,10 +735,15 @@
     const el = e.target;
     if (el.dataset.name != null) { s.names[Number(el.dataset.name)] = el.value.slice(0, 12); save(); updateScore(); return; }
     if (!el.dataset.k) return;
-    const raw = el.value.replace(/[^0-9-]/g, '').slice(0, 4);
-    if (raw !== el.value) el.value = raw;
-    const num = raw === '' || raw === '-' ? null : Math.max(-99, Math.min(999, parseInt(raw, 10)));
-    s.v[el.dataset.k][Number(el.dataset.i)] = Number.isFinite(num) ? num : null;
+    const [lo, hi] = SCAP[el.dataset.k] || [0, 99];
+    const neg = lo < 0 && el.value.trim().startsWith('-');
+    const digits = el.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+    let num = digits === '' ? null : Math.max(lo, Math.min(hi, (neg ? -1 : 1) * parseInt(digits, 10)));
+    if (num === 0) num = 0; // no -0
+    // the box always shows exactly the number that is counted
+    const shown = num == null ? (neg ? '-' : '') : String(num);
+    if (shown !== el.value) el.value = shown;
+    s.v[el.dataset.k][Number(el.dataset.i)] = num;
     save(); updateScore();
   });
   vScore.addEventListener('click', e => {
@@ -859,6 +920,7 @@
   if (['play', 'score', 'odds', 'study', 'settings'].indexOf(start) >= 0) ui.tab = start;
   try { history.replaceState({ tab: ui.tab }, '', '#' + ui.tab); } catch (e) { /* ignore */ }
   showTab(ui.tab, false);
+  if (table) hist({ tab: ui.tab, g: 'game' });  // a resumed game: Back stays in the game
   if (store.online) {
     ui.online = true; net.connecting = true; renderPlay();
     loadOnline().then(r => r.resume()).then(ok => {

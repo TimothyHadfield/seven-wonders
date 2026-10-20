@@ -18,7 +18,8 @@ Live: https://timothyhadfield.github.io/seven-wonders/ · Repo: https://github.c
 | Score tab (real-table calculator) | Done. |
 | Odds tab: Cards / Draft / Science / Military / Hands | Done. Draft table from 300 Hard games per player count. |
 | Study tab: points lost vs Hard per pick | Done. |
-| Online rooms (shared `_online` module) | Done; node tests with createLocal. Two-browser test: see NOT verified / QA line. |
+| Online rooms (shared `_online` module, online.js from `_online` 0b193d8) | Done; node tests with createLocal; two-browser test by the QA agent. |
+| QA pass (2026-10-20, fresh agent, evidence in the session scratchpad sw-qa/) | No blockers. 7 findings fixed: Back mid-game/sheet/lobby, Gizah B stage box overflow, Score clamps/caps and box = count, corrupt saved sections reset one at a time, text player count. Re-checked by a 27-check headless script that fails 18/26 on the old build and passes 27/27 on the fix. |
 
 **Measured strength** (`node tools/measure-levels.js 400 3,4,5,7 1 --json`, 2026-10-20, 1st edition, 400 games per cell; one stronger player in a field of weaker ones; win share at 3/4/5/7 players):
 - Hard in a Medium field: 78 / 67 / 58 / 40% (fair share 33 / 25 / 20 / 14%)
@@ -44,6 +45,9 @@ Live: https://timothyhadfield.github.io/seven-wonders/ · Repo: https://github.c
 - Lighthouse counts itself (see rules-check).
 - Seat i's left neighbour is i+1; Ages I and III pass left.
 - 2-player variant and 7 Wonders Duel not built (see docs/ideas.md).
+- History: entries carry `g: 'game'|'lobby'` and `sheet: 1`; Back closes a sheet, leaves the lobby for setup, and never leaves the site mid-game (it re-pushes a guard entry).
+- Score calculator limits: military -6..18, coins 0..199, wonder 0..40, other points 0..99, each science symbol 0..20, any-symbol 0..3. The box always shows the counted number.
+- Stage boxes are sized in proportion to what they show (cost length + effect).
 
 ## NOT verified
 - A real iPhone (only Safari's engine at 393px via phone-view).

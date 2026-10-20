@@ -6,3 +6,4 @@
 - **Built:** js/cards.js, engine.js, bots.js, online-game.js, art.js, app.js, draft-data.js; index.html; tests; tools (measure-levels, tune, draft-stats, mutate, crosscheck); docs/rules-check.md, docs/ideas.md.
 - **Verified:** 29 engine + 4 online node tests; mutation check (27 breaks); 6,400-game strength measurement; full games played in WebKit at 393px and laptop width; screenshots of every tab.
 - **Open:** real iPhone check; Tim's view on looks and wording.
+- **QA round (same day):** fresh QA agent found no blockers and 7 smaller issues (Back button, Gizah B stage box, Score inputs, corrupt saves, text player count). All fixed and re-checked headless (fixed build 27/27, old build fails 18).
