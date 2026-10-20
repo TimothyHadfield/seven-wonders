@@ -107,18 +107,38 @@
   }
   function softName(s) { return s.split(' ').map(softWord).join(' '); }
 
-  // a card face; o: {cls, attr, size}
+  // a small original picture per card colour (the middle of a real card is an illustration)
+  const PIC = {
+    brown: '<path d="M0 30L10 14l7 8 9-13 14 21z" fill="#7a4b26" opacity=".55"/><path d="M4 30l6-6 6 6M22 30l5-5 5 5" stroke="#5c3518" stroke-width="1.2" fill="none" opacity=".6"/>',
+    grey: '<path d="M8 30V14l6-5 6 5v16zM22 30V18h11v12z" fill="#5f6573" opacity=".5"/><path d="M27 18v-6h3v6" fill="#5f6573" opacity=".5"/>',
+    blue: '<path d="M6 12L20 4l14 8zM7 13h26v2H7zM9 16h3v11H9zM15 16h3v11h-3zM22 16h3v11h-3zM28 16h3v11h-3zM6 27h28v3H6z" fill="#2c5fa3" opacity=".5"/>',
+    yellow: '<path d="M4 14l4-7h24l4 7z" fill="#b58a20" opacity=".55"/><path d="M6 14h28v16H6z" fill="#b58a20" opacity=".3"/><circle cx="14" cy="22" r="3" fill="#b58a20" opacity=".6"/><circle cx="24" cy="23" r="2.4" fill="#b58a20" opacity=".6"/>',
+    red: '<path d="M12 30V10h4V7h3v3h2V7h3v3h4v20z" fill="#9d342c" opacity=".5"/><path d="M18 30v-7a2 2 0 0 1 4 0v7z" fill="#f5dcd8" opacity=".8"/>',
+    green: '<path d="M8 8h18a4 4 0 0 1 0 8H12v10a4 4 0 0 1-4 4z" fill="#2a7144" opacity=".45"/><circle cx="30" cy="23" r="5" fill="none" stroke="#2a7144" stroke-width="1.6" opacity=".55"/>',
+    purple: '<path d="M10 4h20v20l-10-5-10 5z" fill="#643e8c" opacity=".5"/><path d="M14 9h12M14 13h12" stroke="#e9def3" stroke-width="1.2" opacity=".8"/>',
+  };
+  // a card face laid out like the real card: effect banner across the top, cost strip down the top-left,
+  // a picture in the middle, the name on a scroll at the bottom. o: {cls, attr, size, badge}
   function face(c, o) {
     o = o || {};
     const nCost = (c.res || '').length + (c.coin ? 1 : 0);
     const chain = c.to && c.to.length ? '<div class="ch" title="Makes free: ' + c.to.join(', ') + '">⛓ ' + c.to.map(n => n.split(' ')[0]).join(', ') + '</div>' : '';
     const from = c.from && c.from.length ? '<div class="fr">free with ' + c.from[0] + '</div>' : '';
-    return '<div class="card ' + c.color + ' ' + (o.cls || '') + '"' + (o.attr || '') + '>' +
-      '<div class="band"><span class="cst' + (nCost >= 4 ? ' many' : '') + '">' + (cost(c) || '<span class="free">free</span>') + '</span></div>' +
+    return '<div class="card tbl-card ' + c.color + ' ' + (o.cls || '') + '"' + (o.attr || '') + '>' +
+      '<div class="top">' + effect(c) + '</div>' +
+      '<div class="cst' + (nCost >= 4 ? ' many' : '') + '">' + cost(c) + '</div>' +
+      '<svg class="pic" viewBox="0 0 40 30" preserveAspectRatio="xMidYMax meet" aria-hidden="true">' + (PIC[c.color] || '') + '</svg>' +
       // smaller type when the name is long or has a word of 8+ letters, so no word is ever split mid-way ("Worksho-p")
       '<div class="nm' + (c.name.length > 9 || c.name.split(' ').some(w => w.length >= 8) ? ' long' : '') + '" lang="en">' + softName(c.name) + '</div>' +
-      '<div class="ef">' + effect(c) + '</div>' + (o.size === 'big' ? from + chain : '') + (o.badge || '') + '</div>';
+      (o.size === 'big' ? from + chain : '') + (o.badge || '') + '</div>';
   }
+  // a built card in a city column: only its top banner shows, like a real overlapped stack
+  function mini(c, o) {
+    o = o || {};
+    return '<div class="mc ' + c.color + (o.cls ? ' ' + o.cls : '') + '"' + (o.attr || '') + ' title="' + c.name + '"><div class="top">' + effect(c) + '</div></div>';
+  }
+  // the back of an Age card: our own pattern, the Age numeral in the middle
+  function back(age, cls) { return '<div class="tbl-card tbl-back swb a' + (age || 1) + (cls ? ' ' + cls : '') + '"><i>' + ['', 'I', 'II', 'III'][age || 1] + '</i></div>'; }
 
   // wonder emblems: simple silhouettes, one per wonder
   const EMB = {
@@ -137,5 +157,5 @@
   // the site icon (also used in the header)
   const ICON = '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#1a1e2b"/><path d="M12 50l20-34 20 34z" fill="#f0b354"/><path d="M32 16l20 34H38z" fill="#c98f36"/><circle cx="47" cy="15" r="5" fill="#6ea8fe"/><path d="M8 52h48" stroke="#6ea8fe" stroke-width="3" stroke-linecap="round"/></svg>';
 
-  root.SWArt = { res, coin, shield, sci, wild, laurel, chip, cost, resCost, effect, stageEffect, face, emblem, stageIc, COLOR_HEX, ICON, svg, DEFEAT };
+  root.SWArt = { res, coin, shield, sci, wild, laurel, chip, cost, resCost, effect, stageEffect, face, mini, back, emblem, stageIc, COLOR_HEX, ICON, svg, DEFEAT };
 })(typeof self !== 'undefined' ? self : this);

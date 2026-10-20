@@ -106,7 +106,7 @@
   // ------------------------------------------------------------------ ui state
   const ui = { tab: 'play', online: false, sel: -1, pay: 0, hint: null, prevKey: '', prevCities: null, dec: [], oddsTab: 'cards', oddsN: 4, oddsAge: 1, draftSort: 'win', sci: [0, 0, 0, 0], mil: null,
     fx: { prev: null, land: 0 } };
-  function resetSel() { ui.sel = -1; ui.pay = 0; ui.hint = null; }
+  function resetSel() { ui.sel = -1; ui.pay = 0; ui.hint = null; ui.fanSel = -1; }
 
   // ------------------------------------------------------------------ sounds + effects (js/fx.js, js/sfx.js)
   const FX = window.FX, Sfx = window.SWSfx;
@@ -159,7 +159,8 @@
   function fxFly(k, kind) {
     if (!FX.settings.animations) return 0;
     const c = $('#game .hand [data-pick="' + k + '"]');
-    const to = kind === 'wonder' ? $('#game .me .stg.next') : kind === 'sell' ? $('#game [data-fx="coin"]') : $('#game .me .citycards');
+    // build: onto your city stacks; wonder: tucked under the next stage box; sell: face down onto the discard pile
+    const to = kind === 'wonder' ? $('#game .me .stg.next') : kind === 'sell' ? ($('#game .discard') || $('#game [data-fx="coin"]')) : $('#game .me .citycards');
     if (!c || !to) return 0;
     FX.flyTo(c, to, { duration: Math.round(Sfx.LAND * fxSp()), fade: kind === 'sell' });
     return Sfx.LAND;
@@ -262,7 +263,7 @@
 
   // ================================================================== PLAY
   const vPlay = $('#v-play');
-  function renderPlay() { if (table) renderGame(); else if (ui.online) renderOnline(); else renderSetup(); }
+  function renderPlay() { vPlay.classList.remove('ingame'); if (table) renderGame(); else if (ui.online) renderOnline(); else renderSetup(); }
 
   function strengthText() {
     const S = STRENGTH_NOTE;
@@ -442,7 +443,66 @@
   }
   function cityChips(v, p, fresh) {
     const ids = p.city.slice().sort((a, b) => Cd.COLORS.indexOf(card(v, a).color) - Cd.COLORS.indexOf(card(v, b).color));
-    return '<div class="citycards">' + ids.map(id => '<span class="mc' + (fresh && fresh.has(id) ? ' new' : '') + '" style="background:' + A.COLOR_HEX[card(v, id).color] + '">' + esc(card(v, id).name) + '</span>').join('') + '</div>';
+    return '<div class="citynames">' + ids.map(id => '<span class="mcn' + (fresh && fresh.has(id) ? ' new' : '') + '" style="background:' + A.COLOR_HEX[card(v, id).color] + '">' + esc(card(v, id).name) + '</span>').join('') + '</div>';
+  }
+  // ---- the table pieces: built cards stacked in colour columns, the wonder board, coins and tokens
+  function cityCols(v, p, fresh) {
+    const by = {};
+    for (const id of p.city) { const c = card(v, id); (by[c.color] = by[c.color] || []).push(id); }
+    return '<div class="citycards">' + Cd.COLORS.filter(col => by[col]).map(col => '<div class="ccol" style="--n:' + by[col].length + '">' +
+      by[col].map((id, i) => A.mini(card(v, id), { cls: fresh && fresh.has(id) ? 'new' : '', attr: ' style="--i:' + i + '"' })).join('') + '</div>').join('') + '</div>';
+  }
+  function milTokens(p) {
+    return '<span class="mtoks">' + p.mil.map(x => '<span class="mtok ' + (x < 0 ? 'neg' : 'v' + x) + '">' + (x < 0 ? '−' + -x : x) + '</span>').join('') + '</span>';
+  }
+  function boardTile(v, p, extra) {
+    const W = Cd.EDITIONS[v.ed].wonders[p.wonder];
+    return '<div class="wboard">' + A.emblem(p.wonder) + '<div class="wb-in"><div class="wb-top">' + A.res(W.res) + '<b>' + esc(W.name) + '</b>' +
+      (p.side ? '<span class="sd">' + p.side + '</span>' : '') + '<span class="grow"></span>' + milTokens(p) + (extra || '') + '</div>' +
+      '<div class="stages">' + stagesHTML(v, p, false) + '</div></div></div>';
+  }
+  // real coins: 3s (gold) and 1s (silver), a few drawn in a small pile, the count beside them
+  function coinPile(n) {
+    const g = Math.floor(n / 3), s = n % 3, out = [];
+    for (let i = 0; i < Math.min(g, 4); i++) out.push('<span class="tbl-coin">3</span>');
+    for (let i = 0; i < s; i++) out.push('<span class="tbl-coin silver">1</span>');
+    return '<span class="cpile">' + out.join('') + '</span>';
+  }
+  function backFan(v, p) {
+    const n = Math.max(0, Math.min(7, p.hand || 0));
+    let h = '';
+    for (let i = 0; i < n; i++) h += A.back(v.age);
+    if (p.picked && v.phase === 'pick') h += A.back(v.age, 'picked');
+    return h ? '<span class="bfan" title="' + (p.picked ? 'Picked' : 'Choosing') + '">' + h + '</span>' : '';
+  }
+  // an opponent's place at the table: name plate, cards in hand (backs), built cards, board, coins
+  function seatHTML(v, s, side, pr) {
+    const p = v.players[s];
+    let sells = '';
+    if (side) {
+      const got = {};
+      for (const sl of E.slots(v, p, false)) for (const r of sl) got[r] = 1;
+      const list = Object.keys(got).sort((a, b) => 'WSCOGLP'.indexOf(a) - 'WSCOGLP'.indexOf(b));
+      sells = list.length ? '<span class="sells">' + list.map(r => A.res(r)).join('') + '&nbsp;' + (list.some(r => Cd.RAW.indexOf(r) >= 0) ? pr[side][list.find(r => Cd.RAW.indexOf(r) >= 0)] : pr[side][list[0]]) + '¢</span>' : '<span class="sells">none</span>';
+    }
+    return '<div class="seat' + (side ? ' nb' : '') + '"' + (side ? ' data-nb="' + side + '"' : '') + ' data-city="' + s + '" style="--seat:' + SEAT_COL[s] + '">' +
+      '<div class="plate">' + (side === 'L' ? '◀' : '') + '<span class="dot"></span><span class="nmx">' + esc(p.name.replace(/^Computer /, 'C') + (side ? ' · ' + wname(v, p) : '')) + '</span>' + (side === 'R' ? '▶' : '') + '</div>' +
+      '<div class="srow">' + cityCols(v, p) + backFan(v, p) + '</div>' + boardTile(v, p) +
+      '<div class="r"><span class="tok"><span class="tbl-coin"></span>' + p.coins + '</span><span class="tok">' + A.shield() + p.shields + '</span>' + sells + '</div>' +
+      '<div class="last">' + (lastMove(v, s) || '&nbsp;') + '</div></div>';
+  }
+  // the middle of the table: Age plate, the decks waiting for later ages, the face-down discard pile
+  function deckHTML(age, n, cls) {
+    if (!n) return '<div class="tbl-deck is-empty ' + (cls || '') + '"></div>';
+    const st = TABLE.stackShadow(n, { perCard: 0.2, max: 8 });
+    return '<div class="tbl-deck ' + (cls || '') + '" data-count="' + n + '">' + A.back(age).replace('class="', 'style="--tbl-stack:' + st.shadow + ';--tbl-rise:-' + st.thickness + 'px" class="') + '<span class="tbl-badge">' + n + '</span></div>';
+  }
+  function centreHTML(v) {
+    const later = [];
+    for (let a = v.age + 1; a <= 3; a++) later.push(deckHTML(a, Cd.ageDeck(v.ed, a, v.n).length));
+    return '<div class="ctr"><span class="ageplate">Age ' + AGE[v.age] + ' · ' + (v.phase === 'seventh' ? '7th' : v.turn + '/6') + ' ' + (v.age === 2 ? '▶' : '◀') + '</span>' +
+      '<div class="piles">' + (later.length ? '<div><div class="later">' + later.join('') + '</div><span class="lbl">Age ' + AGE[v.age + 1] + '</span></div>' : '') +
+      '<div>' + deckHTML(v.age, v.discardCount, 'discard') + '<span class="lbl">Discard</span></div></div></div>';
   }
   function playerRow(v, s, fresh) {
     const p = v.players[s];
@@ -522,32 +582,20 @@
     const est = E.scoreOne(v, ME).total;
     const pr = E.prices(v, me);
 
-    const nb = s => {
-      const p = v.players[s];
-      const sells = {};
-      for (const sl of E.slots(v, p, false)) for (const r of sl) sells[r] = 1;
-      const side = s === L ? 'L' : 'R';
-      const list = Object.keys(sells).sort((a, b) => 'WSCOGLP'.indexOf(a) - 'WSCOGLP'.indexOf(b));
-      return '<div class="nb" data-city="' + s + '"><div class="t">' + (s === L ? '◀ ' : '') + '<span class="nmx">' + esc(p.name) + ' · ' + esc(wname(v, p)) + '</span>' + (s === R ? ' ▶' : '') + '</div>' +
-        '<div class="r">' + A.shield() + '<b style="color:var(--text)">' + p.shields + '</b> ' + A.coin('') + '<b style="color:var(--text)">' + p.coins + '</b> <span>' + p.stages + '/' + E.stagesOf(v, p).length + '</span>' + A.stageIc() + '</div>' +
-        '<div class="r">' + (list.length ? list.map(r => A.res(r)).join('') + ' <span>' + (list.some(r => Cd.RAW.indexOf(r) >= 0) ? pr[side][list.find(r => Cd.RAW.indexOf(r) >= 0)] : pr[side][list[0]]) + '¢</span>' : '<span>sells nothing</span>') + '</div>' +
-        '<div class="last">' + (lastMove(v, s) || '&nbsp;') + '</div></div>';
-    };
-
-    let handHTML = '', actHTML = '';
+    let handHTML = '', actHTML = '', fanSel = -1, dealIn = false;
     if (v.phase === 'side') {
       if (!me.side) {
         const W = Cd.EDITIONS[v.ed].wonders[me.wonder];
-        handHTML = '<div class="wpick" style="width:100%">' + ['A', 'B'].map(sd => '<div class="panel" data-side="' + sd + '"><b>Side ' + sd + '</b><div class="stages">' +
-          W[sd].map(st => '<div class="stg" style="height:auto;min-height:40px;flex-direction:column"><span>' + A.resCost(st[0]) + '</span><span>' + A.stageEffect(st) + '</span></div>').join('') + '</div></div>').join('') + '</div>';
+        handHTML = '<div class="wpick">' + ['A', 'B'].map(sd => '<div class="wboard" data-side="' + sd + '"><div class="wb-top"><b>' + esc(W.name) + '</b><span class="sd">' + sd + '</span></div><div class="stages">' +
+          W[sd].map(st => '<div class="stg"><span>' + A.resCost(st[0]) + '</span><span>' + A.stageEffect(st) + '</span></div>').join('') + '</div></div>').join('') + '</div>';
         actHTML = '<div class="head"><b>Pick a side for ' + esc(W.full) + '</b></div><div class="tx">Side A is the easier one. Tap a board.</div>';
       } else actHTML = waitHTML(v);
     } else if (v.phase === 'discard' && v.pendingDiscard === ME && v.discardPile) {
-      handHTML = v.discardPile.map((id, k) => A.face(card(v, id), { cls: (ui.sel === k ? 'sel' : '') + (newTurn ? ' deal' : ''), attr: ' data-dpick="' + k + '"' })).join('');
+      handHTML = '<div class="fan">' + v.discardPile.map((id, k) => A.face(card(v, id), { cls: (ui.sel === k ? 'sel is-up' : '') + (newTurn ? ' fanin' : ''), attr: ' data-dpick="' + k + '"' })).join('') + '</div>';
+      fanSel = ui.sel;
       const id = v.discardPile[ui.sel];
       actHTML = '<div class="head"><b>Free build from the discard pile</b></div><div class="tx">' + (id ? esc(card(v, id).name) + ': ' + esc(Cd.effectText(card(v, id))) : 'Your wonder lets you build one discarded card for free. Tap one.') + '</div>' +
         '<div class="btns" style="grid-template-columns:1fr 1fr"><button class="btn primary" data-dbuild' + (id ? '' : ' disabled') + '>Build free</button><button class="btn" data-dskip>Skip</button></div>';
-      handHTML = '<div class="row" style="overflow-x:auto;gap:3px;align-items:flex-end;padding-top:8px">' + handHTML + '</div>';
     } else if ((v.phase === 'pick' || v.phase === 'seventh') && toAct) {
       const ranked = (store.settings.values || ui.hint) ? rankNow(v) : null;
       const best = ranked && ranked[0];
@@ -556,35 +604,45 @@
       const vals = Object.values(val);
       const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
       const opts = E.options(v, ME, v.hand);
-      handHTML = v.hand.map((id, k) => {
+      // a new age: the hand is dealt from the deck in the middle; other turns it is passed over (fxHooks.slide)
+      dealIn = newTurn && v.turn === 1 && v.phase === 'pick';
+      handHTML = '<div class="fan">' + v.hand.map((id, k) => {
         const o = opts[k];
         const can = o.build.ok || o.oly;
         const badge = (store.settings.values && ranked ? '<div class="val" style="color:' + heat(val[k], lo, hi) + '">' + (val[k] >= 0 ? '+' : '') + val[k].toFixed(1) + '</div>' : '') +
           (o.build.ok ? (o.build.free ? '<span class="st">free</span>' : (o.build.coin + o.build.opts[0].L + o.build.opts[0].R ? '<span class="st">' + (o.build.coin + o.build.opts[0].L + o.build.opts[0].R) + '¢</span>' : '')) : '');
-        return A.face(card(v, id), { cls: (ui.sel === k ? 'sel ' : '') + (can ? '' : 'dim ') + (ui.hint && best && best.a.i === k ? 'hint ' : '') + (newTurn ? 'deal' : ''), attr: ' data-pick="' + k + '" style="animation-delay:' + (pl.handDelay + k * Math.round(35 * fxSp())) + 'ms"', badge });
-      }).join('');
+        return A.face(card(v, id), { cls: (ui.sel === k ? 'sel is-up ' : '') + (can ? '' : 'dim ') + (ui.hint && best && best.a.i === k ? 'hint ' : '') + (newTurn && !dealIn ? 'fanin' : ''),
+          attr: ' data-pick="' + k + '"' + (newTurn && !dealIn ? ' style="animation-delay:' + (pl.handDelay + k * Math.round(35 * fxSp())) + 'ms"' : ''), badge });
+      }).join('') + '</div>';
+      fanSel = ui.sel;
       actHTML = actPanel(v, opts, ranked);
     } else actHTML = waitHTML(v);
 
+    // seats round the table from your left: left neighbour, the far side, right neighbour
+    const farSeats = [];
+    for (let s = E.left(v, ME); s !== R; s = E.left(v, s)) if (s !== L) farSeats.push(s);
     const all = v.players.map((p, i) => playerRow(v, i, fresh)).join('');
+    vPlay.classList.add('ingame');
     vPlay.innerHTML = '<div id="game" style="--land:' + pl.land + 'ms">' +
-      '<div class="status"><span class="chip"><b>' + AGE[v.age] + '</b> · ' + (v.phase === 'seventh' ? '7th' : v.turn + '/6') + '</span>' +
-      '<span class="chip" data-fx="coin">' + A.coin('') + '<b>' + coinStart(pl, me.coins) + '</b></span><span class="chip" data-fx="shield">' + A.shield() + '<b>' + me.shields + '</b></span>' +
-      '<span class="chip" title="Points if the game ended now"><span class="vp">' + est + '</span></span><span class="grow"></span>' +
+      '<div class="status"><div class="far">' + farSeats.map(s => seatHTML(v, s, null, pr)).join('') + '</div><div class="tools">' +
       '<button class="icon-btn" id="btn-hint" title="Hint" aria-label="Hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></button>' +
       '<button class="icon-btn" id="btn-all" title="All cities" aria-label="All cities"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V9l4-3 4 3v12M13 21V12l4-3 3 3v9"/></svg></button>' +
       '<button class="icon-btn" id="btn-log" title="Log" aria-label="Log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>' +
-      '<button class="icon-btn" id="btn-menu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>' +
-      '<div id="g-all">' + all + '</div>' +
-      '<div class="nbs">' + nb(L) + nb(R) + '</div>' +
-      '<div class="me" data-city="' + ME + '"><div class="wrow">' + A.emblem(me.wonder) + '<div class="stages">' + stagesHTML(v, me, false) + '</div></div>' +
-      '<div class="resrow">' + produceRow(v, me) + sciRow(v, me) + '</div>' + cityChips(v, me, fresh) + '</div>' +
+      '<button class="icon-btn" id="btn-menu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div></div>' +
+      '<div class="nbs">' + seatHTML(v, L, 'L', pr) + centreHTML(v) + seatHTML(v, R, 'R', pr) + '</div>' +
+      '<div class="me" data-city="' + ME + '"><div class="mytop">' + cityCols(v, me, fresh) +
+      '<div class="mine-tok"><span class="tok" data-fx="coin" title="Coins">' + coinPile(me.coins) + '<b>' + coinStart(pl, me.coins) + '</b></span>' +
+      '<span class="tok" data-fx="shield" title="Shields">' + A.shield() + '<b>' + me.shields + '</b></span></div></div>' +
+      boardTile(v, me, '<span class="laurel" title="Points if the game ended now">' + est + '</span>') +
+      '<div class="resrow myres">' + produceRow(v, me) + sciRow(v, me) + '</div></div>' +
       '<div class="hand">' + handHTML + '</div>' +
       '<div class="act">' + actHTML + '</div>' +
-      '<div id="g-side"><div class="panel scroll" style="flex:1"><div class="label" style="margin-bottom:6px">Log</div>' + logHTML(v) + '</div>' +
+      '<div id="g-side"><div class="tabs2" data-sidetab>' + ['log', 'cities'].map(t => '<button data-st="' + t + '" aria-pressed="' + ((ui.sideTab || 'log') === t) + '">' + cap(t) + '</button>').join('') + '</div>' +
+      '<div class="panel scroll" style="flex:1">' + ((ui.sideTab || 'log') === 'log' ? logHTML(v) : '<div style="display:flex;flex-direction:column;gap:6px">' + all + '</div>') + '</div>' +
       '<div class="panel small muted">' + (v.age === 3 ? 'Guilds in play: <b style="color:var(--text)">' + (v.n + 2) + '</b> of 10. ' : '') + 'Discard pile: <b style="color:var(--text)">' + v.discardCount + '</b> cards.' +
       (table.online ? ' Room <b style="color:var(--text)">' + esc(net.snap.code || '') + '</b>' : '') + '</div></div>' +
       '</div>';
+    layoutHand(fanSel, dealIn ? pl.handDelay : -1, v.age);
     fxRun(pl);
   }
   // while your coins are about to count up or down, the chip starts from the old number
@@ -629,6 +687,38 @@
   function shortWhy(w) { return !w ? 'no' : /coins/.test(w) ? 'coins' : /already/.test(w) ? 'have it' : /finished/.test(w) ? 'done' : 'resources'; }
   function hintWords(v, r) { return (r.kind === 'sell' ? 'Sell ' : r.kind === 'wonder' ? 'Stage with ' : 'Build ') + esc(card(v, r.id).name); }
 
+  // the hand: real 65:100 cards sized to the free height, held as a fan (js/table.js); a new age is dealt from the middle
+  let fanApi = null;
+  function layoutHand(sel, dealDelay, age) {
+    if (fanApi && fanApi.disconnect) fanApi.disconnect();
+    fanApi = null;
+    const hand = $('#game .hand'), f = hand && hand.querySelector('.fan');
+    if (!f || !f.children.length) return;
+    const cards = Array.from(f.children);
+    const wide = window.innerWidth >= 900;
+    const lift = wide ? 22 : 14;
+    const ch = (hand.clientHeight - lift - 6) / 1.03;
+    const cw = Math.max(40, Math.min(wide ? 124 : 108, ch * 0.65));
+    f.style.setProperty('--card-w', cw.toFixed(1) + 'px');
+    // place the cards without motion (a fresh render must not slide in from the left), then lift the picked card
+    f.classList.add('tbl-instant');
+    cards.forEach(c => c.classList.remove('is-up'));
+    const api = fanApi = TABLE.fan(f, cards, { pick: false, spread: 1.04, lift, arc: 0.6, maxRot: 10 });
+    const was = ui.fanSel;
+    ui.fanSel = sel;
+    if (was >= 0 && cards[was]) api.select(was, true);
+    void f.offsetWidth;
+    f.classList.remove('tbl-instant');
+    if (was !== sel) requestAnimationFrame(() => { if (sel >= 0) api.select(sel, true); else if (was >= 0) api.select(was, false); });
+    if (dealDelay < 0 || !TABLE.animOn()) return;
+    const from = $('#game .ctr .piles');
+    cards.forEach((c, k) => {
+      c.style.opacity = '0';
+      setTimeout(() => TABLE.deal(from, c, { face: A.back(age), duration: Math.round(260 * fxSp()) }).then(() => { c.style.opacity = ''; }),
+        dealDelay + k * Math.round(35 * fxSp()));
+    });
+  }
+
   // ------------------------------------------------------------------ game input
   function onGameClick(e) {
     const t = e.target;
@@ -641,6 +731,8 @@
     if (city) { citySheet(v, Number(city.dataset.city)); return; }
     const side = t.closest('[data-side]');
     if (side) { doAct({ t: 'side', side: side.dataset.side }); return; }
+    const st = t.closest('[data-st]');
+    if (st) { ui.sideTab = st.dataset.st; renderGame(); return; }
     const pk = t.closest('[data-pick]');
     if (pk) { const k = Number(pk.dataset.pick); ui.sel = ui.sel === k ? -1 : k; ui.pay = 0; FX.play('cardFlip', { vol: 0.6 }); renderGame(); return; }
     const dp = t.closest('[data-dpick]');
@@ -731,7 +823,7 @@
       '<div class="panel popin" style="align-items:center;text-align:center;gap:2px"><div class="label">Game over</div><div style="font-size:24px;font-weight:850">' +
       (won ? (R.winners.length > 1 ? 'Shared win!' : 'You win!') : esc(R.winners.map(w => nameOf(v, w)).join(' & ')) + ' win' + (R.winners.length > 1 ? '' : 's')) + '</div>' +
       '<div class="muted small">You: ' + R.scores[ME].total + ' points · place ' + place + ' of ' + v.n + (dec.length ? ' · ' + lost.toFixed(1) + ' points lost vs Hard' : '') + '</div></div>' +
-      '<div class="panel scroll" style="overflow-x:auto">' + scoreTable(v, ME, zero) + '</div>' +
+      '<div class="panel pad scroll" style="overflow-x:auto">' + scoreTable(v, ME, zero) + '</div>' +
       '<div class="row"><button class="btn primary grow" data-end="new">New game</button><button class="btn grow" data-end="study">Study</button></div></div>';
     vPlay.onclick = null;
     $('[data-end="new"]', vPlay).addEventListener('click', () => {
