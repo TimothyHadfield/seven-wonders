@@ -58,7 +58,7 @@ Every 2nd-ed card matches I; 2nd-ed wonders match I and T.
 | Stage costs and effects for all 14 sides | `WONDERS1` | RB board descriptions, J | "wonder stages" |
 | Halikarnassos: at the end of the turn the stage is built, look through the discard pile and build one card free (cards discarded this turn included; on turn 6 the discarded last cards are included) | `afterTurn`, `finishAge`, `discardChoices` | RB wonder notes | "Halikarnassos…" |
 | Babylon B stage 2: play the 7th card of each age instead of discarding it (build, stage or sell) | `seventh` phase | RB | "Babylon B plays its 7th card" |
-| Olympia A stage 2: once per age, build a card for free | `olyReady`, `olyAge` | RB | "Olympia A … once per age" |
+| Olympia A stage 2: once per age, build a card **of your choice** for free (RB: "a building of his or her choice"), so also a card you could pay for. The Play screen offers "Free (wonder)" as a payment choice then (fixed 2026-10-20; it was only offered on cards you couldn't afford) | `olyReady`, `olyAge`; app `olyChoice` | RB | "Olympia A … once per age"; edge-check "Olympia free build" |
 | Olympia B stage 1: raw materials from both neighbours cost 1 | `tradeRaw` | RB | (prices test pattern) |
 | Olympia B stage 3: copy one guild from a neighbour at the end (chosen at scoring, best one taken) | `scoreOne` copy | RB | "Olympia B copies the best neighbour guild" |
 | Rhodos: shields on the board count in conflicts | `shields` | RB | military test |
@@ -72,7 +72,7 @@ Every 2nd-ed card matches I; 2nd-ed wonders match I and T.
 | Science: each symbol type scores its count squared, plus 7 per set of three different symbols | `sciScore` | RB | "science: sets of 3" |
 | "Any symbol" cards (Scientists Guild, Babylon) are chosen at the end for the best score | `sciBest` | RB | "science wildcards", brute force |
 | Arena, Haven, Lighthouse, Chamber of Commerce: coins once when built, points at the end | `coinsFrom`, `scoreOne` | RB card list | "Lighthouse and Haven" |
-| Winner: most points; tie → most coins; still tied → shared | `scoreAll` | RB | "ties broken by coins, then shared" |
+| Winner: most points; tie → most coins; still tied → shared. Places on the end and Study screens use the same order (fixed 2026-10-20: a points tie lost on coins said "place 1") | `scoreAll`; app `placeOf` | RB | "ties broken by coins, then shared"; edge-check "tie lost on coins" |
 
 ## Choices where the sources disagree or are silent
 

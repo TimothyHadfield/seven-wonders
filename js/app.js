@@ -21,9 +21,10 @@
     return { v: 1, settings: { ed: 1, sides: 'default', level: 'medium', n: 4, values: false, odds: true, name: '' },
       game: null, last: null, online: false, score: null };
   }
-  const store = (function () {
+  // raw: the saved JSON string; each section is checked, a bad one reset
+  function load(raw) {
     try {
-      const s = JSON.parse(localStorage.getItem(KEY));
+      const s = JSON.parse(raw);
       if (s && s.v === 1) {
         const out = Object.assign(fresh(), s, { settings: Object.assign(fresh().settings, s.settings || {}) });
         const st = out.settings, def = fresh().settings;
@@ -47,8 +48,11 @@
         if (typeof st.name !== 'string') st.name = '';
         return out;
       }
-    } catch (e) { /* private mode or bad JSON: start fresh */ }
+    } catch (e) { /* bad JSON: start fresh */ }
     return fresh();
+  }
+  const store = (function () {
+    try { return load(localStorage.getItem(KEY)); } catch (e) { return fresh(); }  // private mode: start fresh
   })();
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* storage full or blocked: keep playing */ }
@@ -78,6 +82,21 @@
       return net.room;
     });
   }
+  // the same game open in a second tab: whichever tab moved last is saved, so the other one catches up
+  window.addEventListener('storage', e => {
+    if (e.key !== KEY && e.key !== null) return;
+    const n = load(e.newValue);
+    const wasGame = !!table && !table.online;
+    store.settings = n.settings; store.last = n.last; store.score = n.score;
+    if (table && table.online) return;
+    store.game = n.game;
+    table = store.game && store.game.state ? new LocalTable(store.game) : null;
+    try { if (table) table.view(); } catch (err) { table = null; store.game = null; }
+    if (table && !wasGame) guard('game');
+    resetSel(); ui.prevKey = ''; ui.prevCities = null; ui.fx.prev = null;
+    closeSheet(true);
+    render();
+  });
   function backToLocal() { ME = 0; net.savedLast = false; table = store.game && store.game.state ? new LocalTable(store.game) : null; }
   function onNet(snap) {
     net.snap = snap;
@@ -273,7 +292,7 @@
   }
   function renderSetup() {
     const s = store.settings;
-    vPlay.innerHTML = '<div class="setup">' +
+    vPlay.innerHTML = '<div class="setup home">' +
       '<div class="hero">' + A.ICON + '<div><h1>7 Wonders Lab</h1><p>Draft against measured computers, with live odds.</p></div></div>' +
       '<div class="panel">' +
       '<div class="label">Players</div><div class="seg" data-set="n">' + [3, 4, 5, 6, 7].map(n => '<button aria-pressed="' + (s.n === n) + '" data-v="' + n + '">' + n + '</button>').join('') + '</div>' +
@@ -483,7 +502,7 @@
       const got = {};
       for (const sl of E.slots(v, p, false)) for (const r of sl) got[r] = 1;
       const list = Object.keys(got).sort((a, b) => 'WSCOGLP'.indexOf(a) - 'WSCOGLP'.indexOf(b));
-      sells = list.length ? '<span class="sells">' + list.map(r => A.res(r)).join('') + '&nbsp;' + (list.some(r => Cd.RAW.indexOf(r) >= 0) ? pr[side][list.find(r => Cd.RAW.indexOf(r) >= 0)] : pr[side][list[0]]) + '¢</span>' : '<span class="sells">none</span>';
+      sells = list.length ? '<span class="sells"><span class="si">' + list.map(r => A.res(r)).join('') + '</span>&nbsp;' + (list.some(r => Cd.RAW.indexOf(r) >= 0) ? pr[side][list.find(r => Cd.RAW.indexOf(r) >= 0)] : pr[side][list[0]]) + '¢</span>' : '<span class="sells">none</span>';
     }
     return '<div class="seat' + (side ? ' nb' : '') + '"' + (side ? ' data-nb="' + side + '"' : '') + ' data-city="' + s + '" style="--seat:' + SEAT_COL[s] + '">' +
       '<div class="plate">' + (side === 'L' ? '◀' : '') + '<span class="dot"></span><span class="nmx">' + esc(p.name.replace(/^Computer /, 'C') + (side ? ' · ' + wname(v, p) : '')) + '</span>' + (side === 'R' ? '▶' : '') + '</div>' +
@@ -670,20 +689,26 @@
     const w = o.wonder;
     const pays = b.ok ? b.opts : w.ok ? w.opts : [];
     const payLabel = p => (p.L ? '◀' + p.L : '') + (p.L && p.R ? ' · ' : '') + (p.R ? p.R + '▶' : '') || 'own';
-    const bTot = b.ok && !b.free ? b.coin + (b.opts[ui.pay] || b.opts[0]).L + (b.opts[ui.pay] || b.opts[0]).R : 0;
-    const bCost = b.ok ? (b.free ? (b.free === 'chain' ? 'chain' : 'free') : bTot ? bTot + '¢' : (c.res ? 'own' : 'free')) : '';
-    const wP = w.ok ? (w.opts[Math.min(ui.pay, w.opts.length - 1)] || w.opts[0]) : null;
+    // Olympia A: the once-per-age free build may be used on any card, also one you could pay for
+    const olyAlt = olyChoice(v, o);
+    const useOly = olyAlt && ui.pay === 'oly';
+    const pi = typeof ui.pay === 'number' ? ui.pay : 0;
+    const bTot = b.ok && !b.free ? b.coin + (b.opts[pi] || b.opts[0]).L + (b.opts[pi] || b.opts[0]).R : 0;
+    const bCost = useOly ? 'free (wonder)' : b.ok ? (b.free ? (b.free === 'chain' ? 'chain' : 'free') : bTot ? bTot + '¢' : (c.res ? 'own' : 'free')) : '';
+    const wP = w.ok ? (w.opts[Math.min(pi, w.opts.length - 1)] || w.opts[0]) : null;
     const valOf = kind => { if (!ranked) return ''; const r = ranked.find(x => x.a.i === k && x.kind === kind); return r ? ' · ' + (r.v >= 0 ? '+' : '') + r.v.toFixed(1) : ''; };
-    const multi = (b.ok && !b.free && b.opts.length > 1) ? '<div class="pays">' + b.opts.slice(0, 5).map((p, j) => '<button data-pay="' + j + '" aria-pressed="' + (ui.pay === j) + '">' + payLabel(p) + '</button>').join('') + '</div>' : '';
+    const multi = (b.ok && !b.free && (b.opts.length > 1 || olyAlt)) ? '<div class="pays">' + b.opts.slice(0, 5).map((p, j) => '<button data-pay="' + j + '" aria-pressed="' + (ui.pay === j) + '">' + payLabel(p) + '</button>').join('') +
+      (olyAlt ? '<button data-pay="oly" aria-pressed="' + useOly + '">Free (wonder)</button>' : '') + '</div>' : '';
     return '<div class="head"><span class="cchip" style="background:' + A.COLOR_HEX[c.color] + '"></span><b>' + esc(c.name) + '</b><span class="grow"></span>' +
       (ui.hint && ranked && ranked[0] ? '<span class="small">Hint: <b>' + hintWords(v, ranked[0]) + '</b></span>' : '') + '</div>' +
       '<div class="tx">' + esc(Cd.effectText(c)) + (c.to.length ? '. Makes free later: ' + esc(c.to.join(', ')) : '') + (c.from.length ? '. Free if you have ' + esc(c.from.join(' or ')) : '') + '</div>' +
       (store.settings.odds ? '<div class="odds">' + oddsFor(v, id) + '</div>' : '') + multi +
       '<div class="btns">' +
-      '<button class="btn primary" data-do="build"' + (b.ok || o.oly ? '' : ' disabled') + '>Build<small>' + (b.ok ? bCost : o.oly ? 'free (wonder)' : esc(shortWhy(b.why))) + valOf(b.ok ? 'build' : 'oly') + '</small></button>' +
+      '<button class="btn primary" data-do="build"' + (b.ok || o.oly ? '' : ' disabled') + '>Build<small>' + (b.ok ? bCost : o.oly ? 'free (wonder)' : esc(shortWhy(b.why))) + valOf(b.ok && !useOly ? 'build' : 'oly') + '</small></button>' +
       '<button class="btn" data-do="wonder"' + (w.ok ? '' : ' disabled') + '>Stage<small>' + (w.ok ? (wP.L + wP.R ? wP.L + wP.R + '¢' : 'own') : esc(shortWhy(w.why))) + valOf('wonder') + '</small></button>' +
       '<button class="btn" data-do="sell">Sell<small>+3¢' + valOf('sell') + '</small></button></div>';
   }
+  function olyChoice(v, o) { return !!(o && o.build.ok && !o.build.free && E.olyReady(v, v.players[ME])); }
   function shortWhy(w) { return !w ? 'no' : /coins/.test(w) ? 'coins' : /already/.test(w) ? 'have it' : /finished/.test(w) ? 'done' : 'resources'; }
   function hintWords(v, r) { return (r.kind === 'sell' ? 'Sell ' : r.kind === 'wonder' ? 'Stage with ' : 'Build ') + esc(card(v, r.id).name); }
 
@@ -740,22 +765,22 @@
     if (t.closest('[data-dbuild]')) { doAct({ t: 'discard', id: v.discardPile[ui.sel] }); return; }
     if (t.closest('[data-dskip]')) { doAct({ t: 'discard', id: null }); return; }
     const pay = t.closest('[data-pay]');
-    if (pay) { ui.pay = Number(pay.dataset.pay); renderGame(); return; }
+    if (pay) { ui.pay = pay.dataset.pay === 'oly' ? 'oly' : Number(pay.dataset.pay); renderGame(); return; }
     const d = t.closest('[data-do]');
     if (d && ui.sel >= 0) {
       const k = ui.sel;
       const o = E.options(v, ME, v.hand)[k];
+      const pi = typeof ui.pay === 'number' ? ui.pay : 0;
       let a;
       if (d.dataset.do === 'sell') a = { t: 'sell', i: k };
-      else if (d.dataset.do === 'wonder') a = { t: 'wonder', i: k, pay: o.wonder.opts[Math.min(ui.pay, o.wonder.opts.length - 1)] };
-      else if (o.build.ok) a = { t: 'build', i: k, pay: o.build.opts[Math.min(ui.pay, o.build.opts.length - 1)] };
+      else if (d.dataset.do === 'wonder') a = { t: 'wonder', i: k, pay: o.wonder.opts[Math.min(pi, o.wonder.opts.length - 1)] };
+      else if (o.build.ok && !(ui.pay === 'oly' && olyChoice(v, o))) a = { t: 'build', i: k, pay: o.build.opts[Math.min(pi, o.build.opts.length - 1)] };
       else a = { t: 'build', i: k, oly: true };
+      if (net.busy) return;   // a second tap while the room is still answering the first
       record(v, a);
-      if (!net.busy) {
-        const fl = fxFly(k, a.t);
-        if (table.online) FX.play('cardSlide');   // face down until everyone has picked
-        else ui.fx.land = fl;
-      }
+      const fl = fxFly(k, a.t);
+      if (table.online) FX.play('cardSlide');   // face down until everyone has picked
+      else ui.fx.land = fl;
       doAct(a);
     }
   }
@@ -764,7 +789,8 @@
     const r = rankNow(v);
     if (!r.length) return;
     const kind = a.t === 'build' ? (a.oly ? 'oly' : 'build') : a.t;
-    const mine = r.find(x => x.a.i === a.i && x.kind === kind) || r[r.length - 1];
+    // a free Olympia build of a card you could pay for is ranked as building it
+    const mine = r.find(x => x.a.i === a.i && x.kind === kind) || (kind === 'oly' && r.find(x => x.a.i === a.i && x.kind === 'build')) || r[r.length - 1];
     const d = { age: v.age, turn: v.phase === 'seventh' ? 7 : v.turn, chose: { kind, id: v.hand[a.i] }, best: { kind: r[0].kind, id: r[0].id }, lost: +Math.max(0, r[0].v - mine.v).toFixed(2), n: v.hand.length };
     if (table.online) ui.dec.push(d); else { store.game.dec = store.game.dec || []; store.game.dec.push(d); }
   }
@@ -812,11 +838,16 @@
     const tot = '<tr class="tot"><td>Total</td>' + R.scores.map((s, i) => cell(s.total, R.winners.indexOf(i) >= 0 ? 'win' : '')).join('') + '</tr>';
     return '<table class="sc"><thead>' + head + '</thead><tbody>' + rows + tot + '</tbody></table>';
   }
+  // place counts the rulebook tie-break: equal points, more coins ranks higher
+  function placeOf(v, me) {
+    const S = v.result.scores, mine = S[me].total, c = (v.players[me] || {}).coins || 0;
+    return 1 + S.filter((s, i) => s.total > mine || (s.total === mine && ((v.players[i] || {}).coins || 0) > c)).length;
+  }
   function renderEnd(v, pl) {
     const R = v.result;
     const zero = !!(pl && FX.settings.animations && pl.steps.some(s => s.fx === 'scores'));
     const won = R.winners.indexOf(ME) >= 0;
-    const place = 1 + R.scores.filter(s => s.total > R.scores[ME].total).length;
+    const place = placeOf(v, ME);
     const dec = table.online ? ui.dec : (store.game && store.game.dec) || [];
     const lost = dec.reduce((a, d) => a + d.lost, 0);
     vPlay.innerHTML = '<div class="setup">' +
@@ -1044,7 +1075,7 @@
     vStudy.innerHTML = '<div class="page"><div class="twocol" style="flex:1;min-height:0">' +
       '<div style="display:flex;flex-direction:column;gap:8px;min-height:0">' +
       '<div class="panel"><div class="row"><span class="label grow">Your last game</span>' + qBtn('Points lost = how many points (Hard\'s estimate) your pick was worth less than Hard\'s favourite pick in the same spot. It is an estimate, not the truth: Hard can be wrong too.') + '</div>' +
-      '<div class="row" style="gap:16px;margin-top:6px;flex-wrap:wrap"><div><div class="bigval">' + R.scores[me].total + '</div><div class="small muted">points · place ' + (1 + R.scores.filter(s => s.total > R.scores[me].total).length) + '/' + v.n + '</div></div>' +
+      '<div class="row" style="gap:16px;margin-top:6px;flex-wrap:wrap"><div><div class="bigval">' + R.scores[me].total + '</div><div class="small muted">points · place ' + placeOf(v, me) + '/' + v.n + '</div></div>' +
       '<div><div class="bigval" style="color:' + heat(-lost, -15, 0) + '">' + lost.toFixed(1) + '</div><div class="small muted">points lost</div></div>' +
       '<div><div class="bigval">' + (dec.length ? Math.round(100 * same / dec.length) : 0) + '%</div><div class="small muted">same as Hard</div></div></div>' +
       '<div class="small muted" style="margin-top:6px">Lost by age: ' + byAge.map((x, i) => 'Age ' + AGE[i + 1] + ' <b style="color:var(--text)">' + x.toFixed(1) + '</b>').join(' · ') + '</div></div>' +

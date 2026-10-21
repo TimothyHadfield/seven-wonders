@@ -162,6 +162,10 @@
   .shtok { display: inline-grid; place-items: center; }
   .mtok { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; font: 800 9px/1 system-ui, sans-serif; color: #fff;
     background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.35), transparent 50%), #b83a32; box-shadow: 0 1px 0 rgba(0,0,0,.4), 0 2px 3px rgba(0,0,0,.35); }
+  /* real conflict tokens are small oblong cardboard pieces, not round */
+  .mtok { width: 18px; height: 13px; border-radius: 3px; }
+  /* no discard pile yet: bare table, just its place */
+  .ctr .discard.is-empty { border-color: transparent; background: rgba(0,0,0,.12); box-shadow: none; }
   .mtok.v3 { background-color: #c0522f; } .mtok.v5 { background-color: #c9772a; } .mtok.neg { background-color: #2b2b30; }
   .mtoks { display: inline-flex; gap: 1px; }
   .laurel { display: inline-grid; place-items: center; min-width: 24px; height: 18px; padding: 0 4px; border-radius: 9px; font-weight: 850; font-size: 12px; margin-left: 3px; color: #fff;
@@ -244,6 +248,10 @@
   .seat .r .ic { width: 14px; height: 14px; }
   .seat .r .sells { display: inline-flex; align-items: center; gap: 0; margin-left: auto; background: rgba(255,240,210,.82); color: #2a1d0c; border-radius: 4px; padding: 0 3px; font-weight: 700; }
   .seat .r .sells .ic { width: 13px; height: 13px; }
+  /* many resources or a 3-digit coin count: the icons shrink away first, the price always shows */
+  .seat .r .sells { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+  .seat .r .sells .si { display: inline-flex; min-width: 0; overflow: hidden; }
+  .seat .r .tok { flex: none; }
   .seat .last { font-size: 11px; color: rgba(246,239,220,.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .seat .last b { color: #f6efdc; font-weight: 650; }
   .nbs { grid-area: nb; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 5px; align-items: stretch; }
@@ -350,6 +358,33 @@
     .far { display: none; }
     .act { height: auto; }
     .me .citycards { --colh: 30px; --mh: 22px; --bh: 10px; }
+  }
+  /* short screens (phone sideways, laptop at 200% zoom): the start screen in two columns, so it fits without scrolling */
+  .setup.home { overflow-y: auto; }
+  @media (max-height: 500px) and (min-width: 560px) {
+    .setup.home { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); align-content: start; gap: 8px 12px; max-width: 860px; }
+    .setup.home > :not(.panel), .setup.home > details { grid-column: 1; align-self: start; }
+    .setup.home > .panel:not(details) { grid-column: 2; grid-row: 1 / span 4; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px; }
+    .setup.home > .panel:not(details) > * { grid-column: 1 / -1; }
+    .setup.home > .panel:not(details) > [data-start], .setup.home > .panel:not(details) > [data-on] { grid-column: auto; }
+    .setup.home .hero h1 { font-size: 20px; }
+  }
+  /* short phones (iPhone SE): smaller stacks and no last-move line, so the hand never covers your board */
+  @media (max-height: 600px) and (max-width: 559px) {
+    .seat .last { display: none; }
+    .me .citycards { --colh: 34px; --mh: 26px; --bh: 11px; }
+    .far .seat .wboard { display: none; }
+    .act { height: 124px; gap: 3px; padding: 6px 8px; }
+    .act .tx { -webkit-line-clamp: 1; }
+  }
+  .nb .srow { overflow: hidden; }
+  /* 320 px wide with 7 players: four far seats share the top row */
+  @media (max-width: 360px) {
+    .icon-btn { width: 31px; }
+    .tools { gap: 3px; }
+    .far:has(.seat:nth-child(4)) .seat .wboard .stages { display: none; }
+    .far:has(.seat:nth-child(4)) .seat .wboard { align-self: flex-start; }
+    .far:has(.seat:nth-child(4)) .seat .r { flex-wrap: wrap; row-gap: 0; }
   }
   #g-all { display: none; }
   .prow { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
@@ -521,6 +556,6 @@
 <script src="js/fx.js?v=3"></script>
 <script src="js/table.js?v=1"></script>
 <script src="js/sfx.js?v=1"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>
