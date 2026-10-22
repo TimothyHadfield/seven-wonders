@@ -187,11 +187,11 @@
   /* a built stage has a card tucked face down under it: its back peeks out below the box */
   .wboard .stg.built { background: linear-gradient(180deg, rgba(255,220,130,.6), rgba(220,170,70,.45)); border-color: #8a6420; box-shadow: 0 5px 0 -1px #7c4a24, 0 6px 2px -1px rgba(0,0,0,.4); overflow: visible; }
   .wboard .stg.next { border: 1.5px solid #1f5fc0; background: rgba(255,255,255,.35); }
-  .wboard .stg .ic.s { width: 12px; height: 12px; }
-  .wboard .stg.tight .ic.s { width: 9px; height: 9px; }
+  .wboard .stg .ic.s { width: 14px; height: 14px; }
+  .wboard .stg.tight .ic.s { width: 12px; height: 12px; }
   .wboard .stg b.arr { color: rgba(60,40,10,.7); font-size: 12px; margin: 0 1px; }
-  .wboard .stg .ic { width: 14px; height: 14px; }
-  .wboard .stg .alt .ic.s { width: 9px; height: 9px; }
+  .wboard .stg .ic { width: 16px; height: 16px; }
+  .wboard .stg .alt .ic.s { width: 12px; height: 12px; }
   .wboard .stg .vp, .wboard .stg .coin { transform: scale(.9); }
   .wboard .stg .tag { font-size: 9px; color: #2a1d0c; background: rgba(255,255,255,.45); white-space: normal; line-height: 1.05; text-align: center; }
   .stg .tag { font-size: 9.5px; color: var(--text); background: rgba(255,255,255,.08); white-space: normal; line-height: 1.05; text-align: center; }
@@ -252,6 +252,13 @@
   .seat .r .sells { min-width: 0; flex: 0 1 auto; overflow: hidden; }
   .seat .r .sells .si { display: inline-flex; min-width: 0; overflow: hidden; }
   .seat .r .tok { flex: none; }
+  .seat .r .sells .pr { flex: none; margin-left: 2px; font-weight: 700; }
+  .seat .r .sells .pr:not(:last-child) { margin-right: 4px; }
+  .bfan.inplate, .seat .pips { display: none; }
+  /* far seats on an upright phone: the wonder's stages as a thin strip (built = gold) */
+  .pips { gap: 2px; }
+  .pips i { flex: 1; height: 4px; border-radius: 1px; border: 1px solid rgba(246,239,220,.45); }
+  .pips i.on { background: #e2b33c; border-color: #e2b33c; }
   .seat .last { font-size: 11px; color: rgba(246,239,220,.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .seat .last b { color: #f6efdc; font-weight: 650; }
   .nbs { grid-area: nb; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 5px; align-items: stretch; }
@@ -264,6 +271,17 @@
   .far:has(.seat:nth-child(4)) .seat .r { font-size: 10px; gap: 1px; letter-spacing: -.02em; }
   .far .seat .r .ic { width: 12px; height: 12px; }
   .far .seat .tok .tbl-coin { --coin-size: 12px; }
+  /* phone upright: far seats are a name plate with stage pips and coins/shields, so the hand gets the height */
+  @media (max-width: 899px) and (min-height: 501px) {
+    .far .seat .wboard { display: none; }
+    .far .seat .pips { display: flex; }
+    /* two prices (a trading post or marketplace): the price chip takes its own line rather than squeezing its icons away */
+    .nb:has(.sells .pr:not(:last-child)) .r { flex-wrap: wrap; row-gap: 2px; }
+    .nb:has(.sells .pr:not(:last-child)) .r .sells { flex: none; max-width: 100%; }
+    .nb:has(.sells .pr:not(:last-child)) .srow { display: none; }
+  }
+  /* short upright phones (iPhone SE): neighbours' colour stacks give way to the hand (tap a seat for its city) */
+  @media (max-height: 600px) and (max-width: 559px) { .nb .srow, .piles .lbl { display: none; } .piles { --card-w: 24px; } .ctr { gap: 3px; } }
 
   /* the middle of the table: Age plate, the decks for later ages, the face-down discard pile */
   .ctr { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 2px; min-width: 70px; }
@@ -313,8 +331,21 @@
 
   /* ------------------------------------------------ game: laptop (the whole table round you, slim side panel) */
   @media (min-width: 900px) {
-    #game { padding: 12px 14px; gap: 10px; grid-template-columns: 230px minmax(0, 1fr) 230px 280px; grid-template-rows: auto auto auto minmax(0, 1fr);
-      grid-template-areas: "L far R tools" "ctr ctr ctr side" "me me me side" "hand hand act side"; }
+    /* neighbours sit either side of your board (as at a real table), the far seats across the top */
+    #game { padding: 12px 14px; gap: 10px; grid-template-columns: minmax(230px, 1fr) minmax(0, 720px) minmax(230px, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr);
+      grid-template-areas: "far far tools" "L ctr R" "L me R" "hand hand act"; }
+    .nbs > .nb { align-self: stretch; }
+    .nb .srow { min-height: var(--colh); }
+    .nbs .seat .citycards { --colh: 84px; --mw: 30px; --mh: 34px; --bh: 16px; gap: 3px; }
+    .nbs .seat .mc .top .alt .ic, .nbs .seat .mc .top .trade .ic, .nbs .seat .mc .top .per .ic { width: 11px; height: 11px; }
+    .nbs .seat .mc { background: var(--paper); border-radius: 3px; }
+    .nbs .seat .mc .top { display: flex; padding: 0 1px; }
+    .nbs .seat .srow .bfan { display: none; }
+    .nbs .seat .plate .bfan.inplate { display: inline-flex; margin-left: 4px; }
+    .nbs .seat .wboard .stg { height: 24px; }
+    .nbs .seat .r { font-size: 13px; min-height: 22px; }
+    .nbs .seat .r .ic, .nbs .seat .r .sells .ic { width: 16px; height: 16px; }
+    .nbs .seat .r .sells { padding: 1px 4px; }
     .status, .nbs { display: contents; }
     .far { grid-area: far; justify-content: center; gap: 8px; }
     .tools { grid-area: tools; align-self: start; justify-content: flex-end; }
@@ -331,12 +362,18 @@
     .far .seat .citycards { --colh: 26px; --mw: 14px; --mh: 12px; --bh: 4px; }
     .far .seat .plate { font-size: 12px; }
     .far .seat .last { display: block; }
-    .me { width: min(100%, 720px); justify-self: center; gap: 6px; }
-    .me .citycards { --colh: 92px; --mw: 64px; --mh: 52px; --bh: 18px; gap: 6px; }
+    .me { width: 100%; justify-self: center; gap: 6px; }
+    .me .citycards { --colh: 92px; --mw: 70px; --mh: 44px; --bh: 22px; gap: 6px; }
     .me .wboard { padding: 6px 8px 9px 6px; gap: 8px; }
     .me .wboard .emb { width: 70px; }
     .me .wb-top { font-size: 13px; } .me .wb-top b { font-size: 13px; }
-    .me .wboard .stg { height: 36px; }
+    .me .wboard .stg { height: 46px; }
+    .me .wboard .stg .ic.s { width: 19px; height: 19px; }
+    .me .wboard .stg.tight .ic.s { width: 16px; height: 16px; }
+    .me .wboard .stg .alt .ic.s { width: 16px; height: 16px; }
+    .me .wboard .stg .ic { width: 22px; height: 22px; }
+    .me .wboard .stg .vp, .me .wboard .stg .coin { transform: none; min-width: 22px; height: 22px; font-size: 13px; }
+    .me .wboard .stg b.arr { font-size: 16px; }
     .mine-tok .tok { font-size: 16px; }
     .cpile .tbl-coin { --coin-size: 26px; font-size: 11px; }
     .act { height: auto; align-self: end; padding: 12px; gap: 8px; min-height: 200px; }
@@ -345,11 +382,25 @@
     .act .odds { font-size: 13px; -webkit-line-clamp: 2; }
     .act .btns .btn { min-height: 54px; font-size: 15.5px; }
     .icon-btn { width: 42px; height: 40px; }
+    .tools { align-self: start; }
+  }
+  /* tall laptop screens: taller card stacks, so more of each built card's banner shows */
+  @media (min-width: 900px) and (min-height: 860px) {
+    .me .citycards { --colh: 150px; }
+    .nbs .seat .citycards { --colh: 104px; }
+  }
+  /* wide laptops: the Log / Cities side panel beside the table; narrower ones open them from the top buttons */
+  @media (min-width: 1360px) {
+    #game { grid-template-columns: minmax(230px, 1fr) minmax(0, 720px) minmax(230px, 1fr) 280px;
+      grid-template-areas: "far far far tools" "L ctr R side" "L me R side" "hand hand act side"; }
     #btn-all, #btn-log { display: none; }
     #g-side { grid-area: side; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     #g-side .panel { background: rgba(16,12,8,.72); border-color: rgba(255,230,180,.16); }
     #g-side .tabs2 button { min-height: 34px; }
-    .resrow.myres { display: flex; font-size: 12px; color: #f3ead8; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+  }
+  @media (min-width: 900px) {
+    .resrow.myres { display: flex; font-size: 13px; color: #f3ead8; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+    .resrow.myres .ic { width: 18px; height: 18px; }
   }
   /* phone held sideways: the table on the left, your choices on the right */
   @media (max-height: 500px) and (min-width: 560px) and (max-width: 899px) {
@@ -358,6 +409,21 @@
     .far { display: none; }
     .act { height: auto; }
     .me .citycards { --colh: 30px; --mh: 22px; --bh: 10px; }
+    /* the hand needs the height: neighbours lose their last-move line and colour stacks (tap a seat for its city), the centre goes flat */
+    #game { gap: 4px; padding: 4px 8px; }
+    .nb .srow, .seat .last, .piles .lbl { display: none; }
+    .seat { gap: 2px; padding: 3px 5px 4px; }
+    .ctr { gap: 2px; }
+    .piles { --card-w: 22px; }
+    .me { gap: 2px; }
+    .me .wboard { padding-bottom: 6px; }
+    .wboard .stg { height: 26px; }
+  }
+  /* phone held sideways: a slimmer tab bar */
+  @media (max-height: 500px) and (min-width: 560px) and (max-width: 899px) {
+    :root { --tabbar: 40px; }
+    nav.tabs button { flex-direction: row; gap: 6px; font-size: 12.5px; }
+    nav.tabs button svg { width: 18px; height: 18px; }
   }
   /* short screens (phone sideways, laptop at 200% zoom): the start screen in two columns, so it fits without scrolling */
   .setup.home { overflow-y: auto; }
@@ -506,7 +572,6 @@
   .ver a { color: #59607a; }
   .ok { color: var(--good); font-weight: 700; }
   .no { color: var(--bad); font-weight: 700; }
-  @media (max-width: 360px) { .card { width: 45px; } .card .nm { font-size: 8.5px; } }
 
   /* ------------------------------------------------ sound & effects (js/fx.js settings) */
   .mc.new, .mcn.new { animation-delay: var(--land, 0ms); }
@@ -556,6 +621,6 @@
 <script src="js/fx.js?v=3"></script>
 <script src="js/table.js?v=1"></script>
 <script src="js/sfx.js?v=1"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/app.js?v=6"></script>
 </body>
 </html>

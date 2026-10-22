@@ -502,10 +502,14 @@
       const got = {};
       for (const sl of E.slots(v, p, false)) for (const r of sl) got[r] = 1;
       const list = Object.keys(got).sort((a, b) => 'WSCOGLP'.indexOf(a) - 'WSCOGLP'.indexOf(b));
-      sells = list.length ? '<span class="sells"><span class="si">' + list.map(r => A.res(r)).join('') + '</span>&nbsp;' + (list.some(r => Cd.RAW.indexOf(r) >= 0) ? pr[side][list.find(r => Cd.RAW.indexOf(r) >= 0)] : pr[side][list[0]]) + '¢</span>' : '<span class="sells">none</span>';
+      // grouped by what each costs you (a trading post or marketplace makes raw goods and glass/press/loom differ)
+      const byPrice = [];
+      for (const r of list) { const c = pr[side][r]; let g = byPrice.find(x => x.c === c); if (!g) byPrice.push(g = { c, rs: [] }); g.rs.push(r); }
+      sells = list.length ? '<span class="sells">' + byPrice.map(g => '<span class="si">' + g.rs.map(r => A.res(r)).join('') + '</span><b class="pr">' + g.c + '¢</b>').join('') + '</span>' : '<span class="sells">none</span>';
     }
     return '<div class="seat' + (side ? ' nb' : '') + '"' + (side ? ' data-nb="' + side + '"' : '') + ' data-city="' + s + '" style="--seat:' + SEAT_COL[s] + '">' +
-      '<div class="plate">' + (side === 'L' ? '◀' : '') + '<span class="dot"></span><span class="nmx">' + esc(p.name.replace(/^Computer /, 'C') + (side ? ' · ' + wname(v, p) : '')) + '</span>' + (side === 'R' ? '▶' : '') + '</div>' +
+      '<div class="plate">' + (side === 'L' ? '◀' : '') + '<span class="dot"></span><span class="nmx">' + esc(p.name.replace(/^Computer /, 'C') + (side ? ' · ' + wname(v, p) : '')) + '</span>' + (side ? backFan(v, p).replace('class="bfan"', 'class="bfan inplate"') : '') + (side === 'R' ? '▶' : '') + '</div>' +
+      (side ? '' : '<div class="pips" title="Wonder stages">' + E.stagesOf(v, p).map((x, k) => '<i' + (k < p.stages ? ' class="on"' : '') + '></i>').join('') + '</div>') +
       '<div class="srow">' + cityCols(v, p) + backFan(v, p) + '</div>' + boardTile(v, p) +
       '<div class="r"><span class="tok"><span class="tbl-coin"></span>' + p.coins + '</span><span class="tok">' + A.shield() + p.shields + '</span>' + sells + '</div>' +
       '<div class="last">' + (lastMove(v, s) || '&nbsp;') + '</div></div>';
@@ -723,7 +727,9 @@
     const wide = window.innerWidth >= 900;
     const lift = wide ? 22 : 14;
     const ch = (hand.clientHeight - lift - 6) / 1.03;
-    const cw = Math.max(40, Math.min(wide ? 124 : 108, ch * 0.65));
+    // laptop: as tall as the row allows, but narrow enough that every card still shows its name (about 72% of each card visible)
+    const fitW = wide ? (hand.clientWidth - 8) / (1 + 0.72 * Math.max(0, cards.length - 1)) : 1e9;
+    const cw = Math.max(40, Math.min(wide ? 200 : 108, ch * 0.65, fitW));
     f.style.setProperty('--card-w', cw.toFixed(1) + 'px');
     // place the cards without motion (a fresh render must not slide in from the left), then lift the picked card
     f.classList.add('tbl-instant');

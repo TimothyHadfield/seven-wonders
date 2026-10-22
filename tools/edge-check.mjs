@@ -28,7 +28,7 @@ async function open(vp, local, opts = {}) {
   const ctx = await b.newContext(VP[vp]);
   if (opts.blockStorage) await ctx.addInitScript(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('SecurityError'); } }); });
   else if (local !== undefined && local !== null) await ctx.addInitScript(v => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('sevenwonders:v1', v); sessionStorage.setItem('seeded', '1'); } } catch (e) {} }, local);
-  if (opts.noAnim) await ctx.addInitScript(() => { try { localStorage.setItem('fx:settings', JSON.stringify({ animations: false })); } catch (e) {} });
+  if (opts.noAnim) await ctx.addInitScript(() => { try { localStorage.setItem('fx:seven-wonders', JSON.stringify({ animations: false })); } catch (e) {} });
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', e => errs.push(e.message));
