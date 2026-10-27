@@ -1,0 +1,10 @@
+{
+  "repo": "seven-wonders",
+  "ready": "!!(window.SWApp && document.querySelector('#v-play [data-start], #v-play .hand'))",
+  "play": [
+    "(() => { if (window.COACH && COACH.closeOffer) COACH.closeOffer(); const A = SWApp; if (!A.table) A.startGame({ seed: 7, n: 3, level: 'easy', ed: 1, sides: 'A' }); const v = A.table.view(); window.__turn = v.age * 10 + v.turn; A.act({ t: 'sell', i: 0 }); })()"
+  ],
+  "played": "(() => { const t = SWApp.table; if (!t) return false; const v = t.view(); return v.age * 10 + v.turn > window.__turn && v.phase === 'pick' && v.waiting.indexOf(0) >= 0; })()",
+  "safe": "(() => { const b = document.querySelector('[data-tab=\"settings\"]'); if (b) b.click(); })()",
+  "debug": "JSON.stringify((() => { const t = SWApp.table; if (!t) return null; const v = t.view(); return { age: v.age, turn: v.turn, phase: v.phase, waiting: v.waiting, before: window.__turn }; })())"
+}

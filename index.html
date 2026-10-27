@@ -8,7 +8,10 @@
 <meta name="theme-color" content="#0f1117">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="css/table.css?v=1">
+<link rel="stylesheet" href="css/profile.css?v=1">
+<link rel="stylesheet" href="css/coach.css?v=1">
 <style>
   :root {
     --bg: #0f1117; --bg-soft: #161923; --card: #1a1e2b; --line: #2a3042;
@@ -604,6 +607,11 @@
   .stepper button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-soft); cursor: pointer; font-size: 18px; font-weight: 700; }
   .stepper b { min-width: 22px; text-align: center; font-size: 17px; font-variant-numeric: tabular-nums; }
   .twocol { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  /* Study: the page scrolls, the replay sits under the two columns */
+  #v-study .page { overflow-y: auto; }
+  #v-study .twocol { flex: none !important; }
+  .rp-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  @media (min-width: 900px) { #v-study .twocol > .panel.scroll { max-height: calc(100dvh - 150px); } .rp-rows { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
   @media (min-width: 900px) { .twocol { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
   .bigval { font-size: 30px; font-weight: 850; font-variant-numeric: tabular-nums; }
   .bar { height: 8px; background: var(--bg-soft); border-radius: 4px; overflow: hidden; }
@@ -667,13 +675,18 @@
 </div>
 <script src="js/cards.js?v=1"></script>
 <script src="js/engine.js?v=1"></script>
-<script src="js/bots.js?v=1"></script>
+<script src="js/bots.js?v=2"></script>
 <script src="js/online-game.js?v=1"></script>
 <script src="js/draft-data.js?v=1"></script>
 <script src="js/art.js?v=4"></script>
 <script src="js/fx.js?v=4"></script>
 <script src="js/table.js?v=1"></script>
 <script src="js/sfx.js?v=1"></script>
-<script src="js/app.js?v=7"></script>
+<script src="js/profile.js?v=1"></script>
+<script src="js/swprofile.js?v=1"></script>
+<script src="js/coach.js?v=1"></script>
+<script src="js/swcoach.js?v=1"></script>
+<script src="js/pwa.js?v=8" data-version="8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>
