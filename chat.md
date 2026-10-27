@@ -17,3 +17,10 @@
 - **Built:** bigger phone hand with names wrapping inside each card's visible strip, far seats as plates with stage pips, two-price neighbour chip, laptop neighbours beside your board with readable built cards, bigger stage icons, landscape hand no longer over the board, picked-card panel without squashed lines, 320 px coin pile no longer over the colour stacks. tools/vis-check.mjs.
 - **Verified:** vis-check 246/246 WebKit + Chrome (80 fail on the old build); engine 29, online 4, fx 13, ui-check 27/27, edge-check, fx-check. One read-only reviewer; fixed its cut names, lost right-neighbour stacks, squashed panel lines, 320 coin overlap.
 - **Open:** a real iPhone; far seats no longer show their wonder picture on phone (tap a seat); laptop centre band still bare wood at 1280×800.
+
+## 2026-10-27 — improvement pass (builder from the manager)
+- **Asked:** per-game improvement brief: beat Board Game Arena / the official app on every $0 metric; Top 3 to steal = laptop re-layout, full hand names on phone, an unranked training game that explains each age's scoring; kits `_profile`, `_coach`, `_pwa`, `_fx`; Undo vs computer; end-of-game replay; no empty bands. Don't touch online.
+- **Built:** laptop re-layout (decks beside your city, stacks fill the height with names/pictures); one original picture per card; My stats + Daily (swprofile.js), Rules + 11-step guided game (swcoach.js), installable offline copy (pwa); Undo; Study replay; age-end battle banner; names break at syllables. tools/ladder.js.
+- **Decided:** Hard keeps no noise (measured cost); ratings Easy 1200 / Medium 1480 / Hard 1750 from the ladder; My stats/Daily/Rules as one button row (hero too tight at 320).
+- **Verified:** engine 29, online 4, fx 14, study 5, pwa-check 18/18 (3/18 old), vis 246/246, edge 124/124, ui 27/27 (WebKit 393/320/landscape/1280/1440); one read-only reviewer: fixed mid-word name cuts, "Vorkshop", small replay arrows.
+- **Open:** real-phone install/offline; Tim's calls on remaining laptop bare wood at 5p Age I and phone city names.

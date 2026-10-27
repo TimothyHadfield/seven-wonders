@@ -2,7 +2,7 @@
 
 ## START HERE
 Read order: this file → CLAUDE.md → docs/rules-check.md → docs/ideas.md → chat.md.
-Last updated: 2026-10-27 (visibility pass on top of: first build, QA round, design pass, sounds, real-table look, edge pass).
+Last updated: 2026-10-27 (improvement pass vs Board Game Arena / the official app, on top of: first build, QA round, design pass, sounds, real-table look, edge pass, visibility pass).
 Live: https://timothyhadfield.github.io/seven-wonders/ · Repo: https://github.com/TimothyHadfield/seven-wonders
 
 ## Goal right now
@@ -25,6 +25,8 @@ Live: https://timothyhadfield.github.io/seven-wonders/ · Repo: https://github.c
 | Real-table look (2026-10-20) | Done. Wood table; your seat at the bottom: built cards in overlapped colour columns, coin pile + shield, your wonder board with stage boxes (a built stage shows the tucked card edge), hand as a fan of 65:100 cards (banner, cost strip, picture, name scroll; original SVG art) dealt from the age deck with a flip. Neighbours left/right with board, columns, card backs fanned and trade prices; other seats small across the top; centre = next age decks (thinning stacks) + face-down discard pile. Laptop: Log/Cities side panel. Research in session scratchpad `table/seven-wonders/real.md`, before/after shots beside it. Kit: `css/table.css` + `js/table.js` = byte copies of `../_table/` (never edit). |
 | Edge pass (2026-10-20, "weird situations") | Done. 42 scenarios (list + evidence in session scratchpad `edge/seven-wonders/scenarios.md`), regression check `node tools/edge-check.mjs <local url>` (states from `tools/edge-states.js`). Fixed: coin tie-break place on end/Study screens, Olympia free build on any card, second tab overwriting the newer save, setup scrolling in phone landscape / 200% zoom, 7 players at 320 px (far boards overflowed, hand covered your board), neighbour price hidden by many resources or 3-digit coins, online double-tap recording a pick twice. Step-0 reviewer ran: oblong conflict tokens, bare-wood empty discard. |
 | Visibility pass (2026-10-21 → 10-27, "the view of what's happening … very clear") | Done. Phone 393: hand cards 67→80 px, names 7.4→9 px, every overlapped card's name wraps inside its visible strip (no "Observa…"), far seats are name plates with stage pips (row 65→44 px), neighbour price chip shows both prices (raw 1¢ / glass-loom-press 2¢). 320: own colour stacks no longer run under the coin pile. Landscape phone: hand 42→91 px, no longer covers your board. Laptop: neighbours either side of your board with readable built cards (icons 11 px), stage icons 9→16–22 px, hand 124→~180 px, Log/Cities side panel only ≥1360 px. Picked-card panel: no squashed half-lines (odds line gives way to the payment choice). Check: `node tools/vis-check.mjs <local url>` (246 checks, WebKit; `ENGINE=chrome` too) — fails 80 on the old build. Shots: manager scratchpad `vis/seven-wonders/before|after/`. |
+| Improvement pass (2026-10-27, manager brief: "the best version online on every metric", rivals in `../competitor-analysis/board-engine.md`) | Done. **Laptop**: decks moved to a slim column beside your city, no empty middle band; your and the neighbours' built cards fill the height with names + pictures (5-col grid with side panel ≥1360). **Art**: one original picture per card (`pic()` in art.js), paper grain, light behind pictures. **Kits** copied unchanged: `_profile` 1.1.0 (My stats, local Elo, 10 awards, Daily = same deal for everyone vs 3 Hard), `_coach` (Rules sheet + 11-step guided game vs two Easy computers, never counted), `_pwa` 1.2.0 (installable, offline, new-build pill), `_fx` re-copied. **Undo** (6 deep) vs computers, not in Daily/guided. **Study replay** turn by turn (rebuilt from seed + your actions). **Age-end battle banner**. Checks: pwa-check 18/18 (3/18 on the old build), tests/study.test.js 5, fx test 14 (new battle test fails on old sfx.js), vis 246/246, edge 124, ui 27. |
+| Strength ladder (2026-10-27, `node tools/ladder.js 400 3,4`) | Hard among Mediums wins 74%/62% at 3/4p (fair 33/25), ahead of 82% of them; Medium among Easys 78%/63%; Hard among Easys 95%/87%. Ratings in swprofile.js: Easy 1200, Medium 1480, Hard 1750. Hard has no tie-break noise on purpose (noise 0.25 / 0.1 cost 5–7 points of win share; deals are random anyway). |
 
 ## Edge pass scenario summary (2026-10-20)
 | Family | Tested | Failed before | Fixed |
@@ -87,6 +89,11 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - vis-check in Chrome: the local python server sometimes stalls a script request (game never draws / "reading 'init'"); the check reloads once. Not seen in WebKit or live.
 - `ui.pay` is a number (payment option) or `'oly'` (Olympia free build); read it through `pi` / `olyChoice`, never `Math.min(ui.pay, …)` directly.
 - A second tab is kept in step by the `storage` event (app.js `load()`); keep `load` the only parser of the save.
+- `js/profile.js`, `css/profile.css`, `js/coach.js`, `css/coach.css`, `js/pwa.js`, `sw.js`, `tools/pwa-check.mjs` are COPIES of the kits (`-text` in .gitattributes). Never edit them; game parts live in `js/swprofile.js` and `js/swcoach.js`.
+- `js/pwa.js` must load BEFORE app.js (it creates `window.PWA` with `safeToReload: null`; loaded after, it wiped the game's hook). Bump its `data-version` with the other `?v=`.
+- The guided-game offer sits over the bottom of the screen: browser check tools set `coach-offer:seven-wonders-first-game` in their init script, and app.js closes the offer whenever a game or the lobby draws.
+- Replay depends on the engine being deterministic from `init` (seed) + your actions; `store.game.init/acts` must be kept in step with Undo (it trims `acts`). tests/study.test.js guards it.
+- Hand/mini-card names break only at the soft hyphens from `softName` (art.js `BREAK` table for compounds); never `overflow-wrap: anywhere` (it gave "Lumbe r Yard").
 
 ## Decisions
 - 1st edition is the default (the most common copy); 2nd edition is a setting.
@@ -97,6 +104,8 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - History: entries carry `g: 'game'|'lobby'` and `sheet: 1`; Back closes a sheet, leaves the lobby for setup, and never leaves the site mid-game (it re-pushes a guard entry).
 - Score calculator limits: military -6..18, coins 0..199, wonder 0..40, other points 0..99, each science symbol 0..20, any-symbol 0..3. The box always shows the counted number.
 - Stage boxes are sized in proportion to what they show (cost length + effect).
+- My stats: quitting after your first pick = a loss; hint, Card values or Undo = "with help" (unrated); the guided game and online games are never counted. Daily = 4 players, 1st edition, random sides, 3 Hard computers, no Undo.
+- My stats, Daily and Rules sit in one row under Play online on the setup screen (in the hero they squeezed the title at 320 px).
 
 ## NOT verified
 - A real iPhone (only Safari's engine at 393px via phone-view).
@@ -109,7 +118,10 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - Page left in the background for 10 minutes; online with the network dropping mid-game (only "offline before Create" was tested).
 - On iPhone SE-height screens (≤600 px tall) far seats hide their boards and neighbours their last-move line, to keep the hand clear of your board.
 - 2nd-edition rules are checked against app data and rulespal, not an official 2nd-edition PDF.
+- Improvement pass: installing to the iPhone home screen and opening offline on a real phone (pwa-check runs WebKit at 393 px only); the guided game played to the end by a human (steps checked to step 1 + in node); battle banner timing felt by a human.
+- Reviewer notes left as Tim's call: laptop 5-player Age I still has bare wood above your board; far seats show only colour chips; phone cities are colour stacks without names (tap to see).
 
 ## Rejected / parked
 - ~~7 Wonders Duel~~: a different game; parked for its own build.
 - ~~2-player Free City~~: rarely played.
+- ~~Tie-break noise for Hard (anti-predictability)~~: measured −5 to −7 points of win share; every deal is shuffled, so there's nothing fixed to learn (2026-10-27).
