@@ -430,8 +430,8 @@
     .nbs .seat .mc .top .ic, .nbs .seat .mc .top .coin, .nbs .seat .mc .top .vp { width: calc(var(--band) - 3px); height: calc(var(--band) - 3px); font-size: calc(var(--band) * .5); }
     .nbs .seat .mc .top .alt .ic, .nbs .seat .mc .top .trade .ic, .nbs .seat .mc .top .per .ic { width: max(11px, calc(var(--band) * .55)); height: max(11px, calc(var(--band) * .55)); }
     .nbs .seat .mc .mn, .me .mc .mn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding: 1px 2px 0; text-align: center;
-      font: 700 clamp(8.5px, calc(var(--mw) * .2), 11.5px)/1.12 system-ui, sans-serif; color: #2a1d0c; overflow-wrap: anywhere; }
-    .me .mc .mn { -webkit-line-clamp: 1; white-space: nowrap; text-overflow: ellipsis; display: block; }
+      font: 700 clamp(8.5px, calc(var(--mw) * .2), 11.5px)/1.12 system-ui, sans-serif; color: #2a1d0c; overflow-wrap: normal; -webkit-hyphens: manual; hyphens: manual; }
+    .me .mc .mn { -webkit-line-clamp: 2; }
     /* a card with room below its name (few cards in the column) shows its picture too */
     .nbs .seat .mc .mp, .me .mc .mp { display: block; position: absolute; left: 8%; width: 84%; bottom: 3px; height: auto; }
     .nbs .seat .mc .mp { top: calc(var(--band) + 2.3 * clamp(8.5px, calc(var(--mw) * .2), 11.5px) + 3px); }
@@ -693,7 +693,7 @@
 <script src="js/bots.js?v=2"></script>
 <script src="js/online-game.js?v=1"></script>
 <script src="js/draft-data.js?v=1"></script>
-<script src="js/art.js?v=4"></script>
+<script src="js/art.js?v=5"></script>
 <script src="js/fx.js?v=4"></script>
 <script src="js/table.js?v=1"></script>
 <script src="js/sfx.js?v=2"></script>
@@ -701,7 +701,7 @@
 <script src="js/swprofile.js?v=1"></script>
 <script src="js/coach.js?v=1"></script>
 <script src="js/swcoach.js?v=1"></script>
-<script src="js/pwa.js?v=9" data-version="9"></script>
-<script src="js/app.js?v=9"></script>
+<script src="js/pwa.js?v=10" data-version="10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>

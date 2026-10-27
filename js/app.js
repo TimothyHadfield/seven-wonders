@@ -1284,9 +1284,9 @@
       (m.t === 'build' ? 'built <b>' + esc(card(v, m.id).name) + '</b>' : m.t === 'wonder' ? 'built wonder stage ' + m.stage : 'sold a card') + '</li>').join('');
     const word = x => (x.kind === 'sell' ? 'Sell ' : x.kind === 'wonder' ? 'Stage: ' : '') + esc(E.card(v, x.id).name);
     return '<div class="panel replay" style="gap:6px"><div class="row"><span class="label grow">Replay</span>' +
-      '<button class="btn small" data-rp="-1"' + (i ? '' : ' disabled') + ' aria-label="Previous turn">‹</button>' +
+      '<button class="btn small" style="min-width:44px" data-rp="-1"' + (i ? '' : ' disabled') + ' aria-label="Previous turn">‹</button>' +
       '<b class="small" style="min-width:104px;text-align:center">Age ' + AGE[T.age] + ' · turn ' + T.turn + '</b>' +
-      '<button class="btn small" data-rp="1"' + (i < F.length - 1 ? '' : ' disabled') + ' aria-label="Next turn">›</button></div>' +
+      '<button class="btn small" style="min-width:44px" data-rp="1"' + (i < F.length - 1 ? '' : ' disabled') + ' aria-label="Next turn">›</button></div>' +
       '<input type="range" min="0" max="' + (F.length - 1) + '" value="' + i + '" data-rpr aria-label="Turn" style="width:100%">' +
       (d && d.lost >= 0.05 ? '<div class="small muted">Hard would have: <b style="color:var(--text)">' + word(d.best) + '</b> (−' + d.lost.toFixed(1) + ')</div>' : '') +
       '<ul class="log">' + moves + '</ul>' +

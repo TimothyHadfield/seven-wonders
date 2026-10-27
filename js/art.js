@@ -89,9 +89,11 @@
   // soft hyphen near the middle of long words, so narrow cards break "Forti-fications", not "Fortificatio-ns"
   // (Safari's own hyphenation isn't available everywhere, so the break points are chosen here)
   const VOW = /[aeiouy]/i;
-  const BREAK = { Marketplace: 6, Apothecary: 6, Brickyard: 5, Shipowners: 4, Magistrates: 5, Laboratory: 6 };
+  // 8-letter words got no break point before, so "Workshop" ran past a narrow overlapped card ("Vorkshop")
+  const BREAK = { Marketplace: 6, Apothecary: 6, Brickyard: 5, Shipowners: 4, Magistrates: 5, Laboratory: 6,
+    Pawnshop: 4, Stockade: 5, Barracks: 3, Workshop: 4, Aqueduct: 4, Vineyard: 4, Training: 5, Pantheon: 4, Commerce: 3, Builders: 5 };
   function softWord(w) {
-    if (w.length < 9) return w;
+    if (w.length < 8) return w;
     if (BREAK[w]) return w.slice(0, BREAK[w]) + '­' + w.slice(BREAK[w]);
     let best = -1, bestScore = 1e9;
     for (let i = 3; i <= w.length - 3; i++) {
@@ -209,7 +211,7 @@
   // a built card in a city column: only its top banner shows, like a real overlapped stack
   function mini(c, o) {
     o = o || {};
-    return '<div class="mc ' + c.color + (o.cls ? ' ' + o.cls : '') + '"' + (o.attr || '') + ' title="' + c.name + '"><div class="top">' + effect(c) + '</div><b class="mn">' + c.name + '</b>' +
+    return '<div class="mc ' + c.color + (o.cls ? ' ' + o.cls : '') + '"' + (o.attr || '') + ' title="' + c.name + '"><div class="top">' + effect(c) + '</div><b class="mn" lang="en">' + softName(c.name) + '</b>' +
       '<svg class="mp" viewBox="0 0 40 30" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' + pic(c) + '</svg></div>';
   }
   // the back of an Age card: our own pattern, the Age numeral in the middle
