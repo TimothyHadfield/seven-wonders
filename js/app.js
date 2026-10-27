@@ -468,7 +468,8 @@
   function cityCols(v, p, fresh) {
     const by = {};
     for (const id of p.city) { const c = card(v, id); (by[c.color] = by[c.color] || []).push(id); }
-    return '<div class="citycards">' + Cd.COLORS.filter(col => by[col]).map(col => '<div class="ccol" style="--n:' + by[col].length + '">' +
+    const rows = Math.max(1, ...Object.values(by).map(a => a.length));
+    return '<div class="citycards" style="--cols:' + Math.max(4, Object.keys(by).length) + ';--rows:' + rows + '">' + Cd.COLORS.filter(col => by[col]).map(col => '<div class="ccol" style="--n:' + by[col].length + '">' +
       by[col].map((id, i) => A.mini(card(v, id), { cls: fresh && fresh.has(id) ? 'new' : '', attr: ' style="--i:' + i + '"' })).join('') + '</div>').join('') + '</div>';
   }
   function milTokens(p) {
@@ -726,9 +727,14 @@
     const cards = Array.from(f.children);
     const wide = window.innerWidth >= 900;
     const lift = wide ? 22 : 14;
-    const ch = (hand.clientHeight - lift - 6) / 1.03;
     // laptop: as tall as the row allows, but narrow enough that every card still shows its name (about 72% of each card visible)
     const fitW = wide ? (hand.clientWidth - 8) / (1 + 0.72 * Math.max(0, cards.length - 1)) : 1e9;
+    // a wide hand row that the cards can't fill (7 narrow cards) gives its spare height back to the table above it
+    if (wide) {
+      const g = $('#game'), need = Math.ceil(Math.min(200, fitW) / 0.65 * 1.03 + lift + 8);
+      if (g && need < hand.clientHeight - 12) g.style.setProperty('--handh', Math.max(200, need) + 'px');
+    }
+    const ch = (hand.clientHeight - lift - 6) / 1.03;
     const cw = Math.max(40, Math.min(wide ? 200 : 108, ch * 0.65, fitW));
     f.style.setProperty('--card-w', cw.toFixed(1) + 'px');
     // place the cards without motion (a fresh render must not slide in from the left), then lift the picked card

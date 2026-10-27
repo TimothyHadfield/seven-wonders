@@ -209,6 +209,10 @@
   .mc .top .cchip { width: 4px; height: 7px; }
   .mc.brown { --frame: #8a5a32; --paper: #ecdcc4; } .mc.grey { --frame: #7d8292; --paper: #e5e6ea; } .mc.blue { --frame: #2f6bbd; --paper: #dce7f6; }
   .mc.yellow { --frame: #d3a12a; --paper: #f6ebcc; } .mc.red { --frame: #c2433a; --paper: #f4dcd6; } .mc.green { --frame: #2f8a50; --paper: #dbeedf; } .mc.purple { --frame: #7b4cab; --paper: #e8ddf3; }
+  .mc .mn, .mc .mp { display: none; }
+  /* card paper grain + a little light on each picture (original art, see js/art.js pic()) */
+  .card { background-image: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0) 40%, rgba(0,0,0,.06)), repeating-linear-gradient(35deg, rgba(90,60,20,.035) 0 1px, transparent 1px 3px); }
+  .card .pic { border-radius: calc(var(--cw) * .04); background: radial-gradient(ellipse at 50% 20%, rgba(255,255,255,.6), rgba(255,255,255,0) 70%); }
   .mc.new { animation: flipin .45s ease-out both; transform-origin: 50% 0; }
 
   /* ------------------------------------------------ game: phone (you sit at the bottom edge) */
@@ -240,7 +244,8 @@
   .seat .wboard .emb { width: 22px; }
   .seat .wb-top { display: none; }
   .seat .wboard .stg { height: 13px; padding: 0; border-radius: 2px; }
-  .seat .wboard .stg > * { display: none; }
+  @media (max-width: 899px) { .seat .wboard .stg > * { display: none; } }
+  .far .seat .wboard .stg > * { display: none; }
   .seat .wboard .stg.built { box-shadow: 0 3px 0 -1px #7c4a24; }
   .seat .citycards { --colh: 22px; --mw: 14px; --mh: 12px; --bh: 4px; gap: 2px; }
   .seat .mc .top { display: none; }
@@ -402,6 +407,47 @@
   @media (min-width: 900px) {
     .resrow.myres { display: flex; font-size: 13px; color: #f3ead8; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
     .resrow.myres .ic { width: 18px; height: 18px; }
+  }
+  /* laptop, no empty middle band: the decks stand in a slim column beside your city, the middle row takes all the
+     spare height, and your built cards and both neighbours' cities grow to fill it (container units size the stacks) */
+  @media (min-width: 900px) {
+    #game { --handh: clamp(220px, 37vh, 340px);
+      grid-template-columns: minmax(240px, 1fr) minmax(0, 660px) auto minmax(240px, 1fr);
+      grid-template-rows: auto minmax(0, 1fr) var(--handh);
+      grid-template-areas: "far far far tools" "L me ctr R" "hand hand hand act"; }
+    .ctr { flex-direction: column; justify-content: center; gap: 14px; padding: 0 4px; }
+    .piles { flex-direction: column; align-items: center; gap: 18px; --card-w: 50px; }
+    .nbs > .nb { min-height: 0; }
+    .nbs .seat .srow { flex: 1; min-height: 0; container-type: size; align-items: flex-start; }
+    /* stacks fill the height: each built card shows its banner and, when there is room, its name below it */
+    .nbs .seat .citycards { --colh: 100cqh; --mw: min(50px, calc((100cqw - (var(--cols, 7) - 1) * 4px) / var(--cols, 7))); --band: calc(var(--mw) * .5);
+      --mh: clamp(calc(var(--mw) * 1.15), calc(100cqh / var(--rows, 1) - 4px), calc(var(--mw) * 1.6));
+      --bh: clamp(var(--band), calc((100cqh - var(--mh)) / max(1, var(--rows, 1) - 1)), calc(var(--mh) - 2px)); gap: 4px; }
+    .nbs .seat .mc .top, .me .mc .top { height: var(--band); }
+    .nbs .seat .mc .top .ic, .nbs .seat .mc .top .coin, .nbs .seat .mc .top .vp { width: calc(var(--band) - 3px); height: calc(var(--band) - 3px); font-size: calc(var(--band) * .5); }
+    .nbs .seat .mc .top .alt .ic, .nbs .seat .mc .top .trade .ic, .nbs .seat .mc .top .per .ic { width: max(11px, calc(var(--band) * .55)); height: max(11px, calc(var(--band) * .55)); }
+    .nbs .seat .mc .mn, .me .mc .mn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding: 1px 2px 0; text-align: center;
+      font: 700 clamp(8.5px, calc(var(--mw) * .2), 11.5px)/1.12 system-ui, sans-serif; color: #2a1d0c; overflow-wrap: anywhere; }
+    .me .mc .mn { -webkit-line-clamp: 1; white-space: nowrap; text-overflow: ellipsis; display: block; }
+    /* a card with room below its name (few cards in the column) shows its picture too */
+    .nbs .seat .mc .mp, .me .mc .mp { display: block; position: absolute; left: 8%; width: 84%; bottom: 3px; height: auto; }
+    .nbs .seat .mc .mp { top: calc(var(--band) + 2.3 * clamp(8.5px, calc(var(--mw) * .2), 11.5px) + 3px); }
+    .me .mc .mp { top: calc(var(--band) + 1.2 * clamp(8.5px, calc(var(--mw) * .2), 11.5px) + 4px); }
+    .nbs .seat .wboard .emb { width: 38px; }
+    .nbs .seat .wboard .stg { height: 34px; }
+    .nbs .seat .wboard .stg .ic, .nbs .seat .wboard .stg .ic.s { width: 14px; height: 14px; }
+    .nbs .seat .wboard .stg.tight .ic.s, .nbs .seat .wboard .stg .alt .ic.s { width: 12px; height: 12px; }
+    .nbs .seat .wboard .stg b.arr { font-size: 11px; margin: 0; }
+    .me { min-height: 0; }
+    .me .mytop { flex: 1; min-height: 0; container-type: size; align-items: flex-end; }
+    .me .citycards { --colh: 100cqh; --mw: min(84px, calc((100cqw - 110px - (var(--cols, 7) - 1) * 6px) / var(--cols, 7))); --band: min(26px, calc(var(--mw) * .32)); --mh: clamp(calc(var(--mw) * .62), calc(100cqh / var(--rows, 1) - 4px), calc(var(--mw) * 1.45));
+      --bh: clamp(var(--band), calc((100cqh - var(--mh)) / max(1, var(--rows, 1) - 1)), calc(var(--mh) - 2px)); align-self: stretch; }
+    .me .mc .top .ic, .me .mc .top .coin, .me .mc .top .vp { width: calc(var(--band) - 3px); height: calc(var(--band) - 3px); font-size: calc(var(--band) * .5); }
+    .far .seat { flex: 0 1 200px; }
+  }
+  @media (min-width: 1360px) {
+    #game { grid-template-columns: minmax(240px, 1fr) minmax(0, 660px) auto minmax(240px, 1fr) 280px;
+      grid-template-areas: "far far far far tools" "L me ctr R side" "hand hand hand act side"; }
   }
   /* phone held sideways: the table on the left, your choices on the right */
   @media (max-height: 500px) and (min-width: 560px) and (max-width: 899px) {
@@ -624,10 +670,10 @@
 <script src="js/bots.js?v=1"></script>
 <script src="js/online-game.js?v=1"></script>
 <script src="js/draft-data.js?v=1"></script>
-<script src="js/art.js?v=3"></script>
-<script src="js/fx.js?v=3"></script>
+<script src="js/art.js?v=4"></script>
+<script src="js/fx.js?v=4"></script>
 <script src="js/table.js?v=1"></script>
 <script src="js/sfx.js?v=1"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>
