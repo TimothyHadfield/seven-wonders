@@ -43,17 +43,30 @@ const measure = () => {
   const farH = (document.querySelector('#game .far') || {}).getBoundingClientRect?.().height || 0;
   const steps = cb.slice(1).map((r, i) => r.left - cb[i].left);
   const showShare = steps.length && cw ? Math.min(...steps) / cw : 1;
-  return { showShare, cw, nm, icons, stg, overlapBoard: Math.round(board.bottom - cardTop), emptyAbove, sells, nbIcon, farH,
+  // a hand card's name is readable when the end of every line of it is still on that card (not under the next card)
+  const cutNames = cards.filter(c => {
+    const nmEl = c.querySelector('.nm'); const rg = document.createRange(); rg.selectNodeContents(nmEl);
+    return Array.from(rg.getClientRects()).some(r => { const y = r.top + r.height / 2;
+      return [r.left + 1, r.right - 1].some(x => { const hit = document.elementFromPoint(x, y); return !hit || hit.closest('.card') !== c; }); });
+  }).map(c => c.querySelector('.nm').textContent);
+  // your own colour stacks end before your coin pile starts
+  const cc = document.querySelector('#game .me .citycards'), mt = document.querySelector('#game .me .mine-tok');
+  const lastCol = cc && cc.lastElementChild ? cc.lastElementChild.getBoundingClientRect().right : 0;
+  const coinOverlap = mt ? Math.round(lastCol - mt.getBoundingClientRect().left) : 0;
+  const nbStacks = qa('.nbs .seat .srow').filter(e => e.getBoundingClientRect().height > 8).length;
+  return { coinOverlap, nbStacks, cutNames, showShare, cw, nm, icons, stg, overlapBoard: Math.round(board.bottom - cardTop), emptyAbove, sells, nbIcon, farH,
     overflow: document.documentElement.scrollWidth > innerWidth, cardsInView: cb.every(r => r.left >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1) };
 };
-for (const [st, local] of [['late7', S.age3_7], ['mid4', S.mid4]]) {
+for (const [st, local] of [['late7', S.age3_7], ['mid4', S.mid4], ['late7t6', S.age3t6_7]]) {
   for (const vp of Object.keys(VP)) {
     const ctx = await b.newContext(VP[vp]);
     await ctx.addInitScript(v => { try { localStorage.setItem('sevenwonders:v1', v); localStorage.setItem('fx:seven-wonders', JSON.stringify({ animations: false })); } catch (e) {} }, local);
     const p = await ctx.newPage();
     const errs = [];
     p.on('pageerror', e => errs.push(e.message));
-    await p.goto(url); await p.waitForTimeout(800);
+    // one reload if the local test server stalls a request (seen now and then in Chrome under load)
+    for (let t = 0; t < 2; t++) { await p.goto(url); if (await p.waitForSelector('#game .me .wboard', { timeout: 15000 }).then(() => 1, () => 0)) break; }
+    await p.waitForTimeout(800);
     const m = await p.evaluate(measure);
     if (SHOTS) await p.screenshot({ path: join(SHOTS, st + '-' + vp + '.png') });
     const [fw, fnm, fic, fstg] = FLOOR[vp];
@@ -62,7 +75,9 @@ for (const [st, local] of [['late7', S.age3_7], ['mid4', S.mid4]]) {
     ok(tag + 'card names at least ' + fnm + ' px', m.nm >= fnm, m.nm);
     ok(tag + 'card cost/effect icons at least ' + fic + ' px', m.icons >= fic, m.icons && m.icons.toFixed(1));
     ok(tag + 'next wonder stage icons at least ' + fstg + ' px', m.stg === null || m.stg >= fstg, m.stg && m.stg.toFixed(1));
+    ok(tag + 'every hand card name readable (not under the next card)', m.cutNames.length === 0, m.cutNames.join(', '));
     ok(tag + 'hand does not cover your wonder board', m.overlapBoard <= 0, m.overlapBoard);
+    ok(tag + 'your colour stacks do not run under your coins', m.coinOverlap <= 0, m.coinOverlap);
     ok(tag + 'all hand cards on screen, no sideways scroll', m.cardsInView && !m.overflow);
     if (vp.startsWith('d')) {
       ok(tag + 'each hand card shows >= 60% of its width (name readable)', m.showShare >= 0.6, m.showShare.toFixed(2));
@@ -70,6 +85,7 @@ for (const [st, local] of [['late7', S.age3_7], ['mid4', S.mid4]]) {
       ok(tag + 'neighbours\' built cards show their icons (>= 10 px)', m.nbIcon >= 10, m.nbIcon && m.nbIcon.toFixed(1));
     }
     if (vp === 'p393') ok(tag + 'far seats row at most 46 px', m.farH <= 46, Math.round(m.farH));
+    if (vp === 'p393') ok(tag + 'both neighbours show their built-card colour stacks', m.nbStacks === 2, m.nbStacks);
     // late7: you have a raw-goods trading post on the right, so raw goods cost 1 there and glass/press/loom 2
     if (st === 'late7') ok(tag + 'right neighbour shows both prices (1 and 2)', /1¢/.test(m.sells) && /2¢/.test(m.sells), m.sells);
     // tapping a card still selects that card
@@ -81,6 +97,12 @@ for (const [st, local] of [['late7', S.age3_7], ['mid4', S.mid4]]) {
     ok(tag + 'tap on the last card selects it', sel === String(k), sel);
     const btn = await p.evaluate(() => { const r = document.querySelector('.act [data-do="build"]')?.getBoundingClientRect(); return r ? r.bottom <= innerHeight && r.height >= 40 : false; });
     ok(tag + 'Build button on screen and >= 40 px', btn);
+    await p.click('#game .hand .fan > .card[data-pick="0"]', { force: true }); await p.waitForTimeout(400);
+    // the picked card's panel: no line squashed below its own height, buttons inside the panel
+    const actOk = await p.evaluate(() => { const a = document.querySelector('.act'), ar = a.getBoundingClientRect();
+      const squashed = Array.from(a.querySelectorAll('.tx, .odds')).filter(e => getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height < parseFloat(getComputedStyle(e).lineHeight) - 1).map(e => e.className);
+      const b = a.querySelector('.btns').getBoundingClientRect(); return squashed.join(',') + (b.bottom > ar.bottom + 1 ? ' buttons-outside' : ''); });
+    ok(tag + 'picked card panel: no squashed lines, buttons inside', actOk === '', actOk);
     ok(tag + 'no page errors', errs.length === 0, errs.join(' | '));
     await ctx.close();
   }

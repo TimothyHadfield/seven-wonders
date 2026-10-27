@@ -735,6 +735,10 @@
     f.classList.add('tbl-instant');
     cards.forEach(c => c.classList.remove('is-up'));
     const api = fanApi = TABLE.fan(f, cards, { pick: false, spread: 1.04, lift, arc: 0.6, maxRot: 10 });
+    // an overlapped card's name wraps inside the part of the card you can see, so the next card never hides it
+    const step = cards.length > 1 ? parseFloat(cards[1].style.getPropertyValue('--x')) - parseFloat(cards[0].style.getPropertyValue('--x')) : cw;
+    if (step < cw * 0.95) f.style.setProperty('--nmr', Math.max(cw * 0.05, cw - step + cw * 0.07).toFixed(1) + 'px');
+    else f.style.removeProperty('--nmr');
     const was = ui.fanSel;
     ui.fanSel = sel;
     if (was >= 0 && cards[was]) api.select(was, true);

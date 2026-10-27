@@ -125,6 +125,7 @@
     background: linear-gradient(#f8f0dc, #e6d6b2); border: 1px solid rgba(90,60,20,.35); box-shadow: 0 1px 1px rgba(0,0,0,.15);
     font: 800 calc(var(--cw) * .135)/1.02 Georgia, "Times New Roman", serif; color: #2b1f12; overflow-wrap: normal; -webkit-hyphens: manual; hyphens: manual; }
   .card .nm.long { font-size: calc(var(--cw) * .112); letter-spacing: -.1px; }
+  .hand .fan > .card:not(:last-child):not(.is-up) .nm { right: var(--nmr, calc(var(--cw) * .05)); }
   .card .ch, .card .fr { font-size: 10.5px; padding: 2px 6px; color: #444; }
   .card.brown { --frame: #8a5a32; --paper: #ecdcc4; } .card.grey { --frame: #7d8292; --paper: #e5e6ea; } .card.blue { --frame: #2f6bbd; --paper: #dce7f6; }
   .card.yellow { --frame: #d3a12a; --paper: #f6ebcc; } .card.red { --frame: #c2433a; --paper: #f4dcd6; } .card.green { --frame: #2f8a50; --paper: #dbeedf; } .card.purple { --frame: #7b4cab; --paper: #e8ddf3; }
@@ -278,7 +279,7 @@
     /* two prices (a trading post or marketplace): the price chip takes its own line rather than squeezing its icons away */
     .nb:has(.sells .pr:not(:last-child)) .r { flex-wrap: wrap; row-gap: 2px; }
     .nb:has(.sells .pr:not(:last-child)) .r .sells { flex: none; max-width: 100%; }
-    .nb:has(.sells .pr:not(:last-child)) .srow { display: none; }
+    .nb:has(.sells .pr:not(:last-child)) .last { display: none; }
   }
   /* short upright phones (iPhone SE): neighbours' colour stacks give way to the hand (tap a seat for its city) */
   @media (max-height: 600px) and (max-width: 559px) { .nb .srow, .piles .lbl { display: none; } .piles { --card-w: 24px; } .ctr { gap: 3px; } }
@@ -336,7 +337,7 @@
       grid-template-areas: "far far tools" "L ctr R" "L me R" "hand hand act"; }
     .nbs > .nb { align-self: stretch; }
     .nb .srow { min-height: var(--colh); }
-    .nbs .seat .citycards { --colh: 84px; --mw: 30px; --mh: 34px; --bh: 16px; gap: 3px; }
+    .nbs .seat .citycards { --colh: 124px; --mw: 30px; --mh: 34px; --bh: 16px; gap: 3px; }
     .nbs .seat .mc .top .alt .ic, .nbs .seat .mc .top .trade .ic, .nbs .seat .mc .top .per .ic { width: 11px; height: 11px; }
     .nbs .seat .mc { background: var(--paper); border-radius: 3px; }
     .nbs .seat .mc .top { display: flex; padding: 0 1px; }
@@ -387,7 +388,7 @@
   /* tall laptop screens: taller card stacks, so more of each built card's banner shows */
   @media (min-width: 900px) and (min-height: 860px) {
     .me .citycards { --colh: 150px; }
-    .nbs .seat .citycards { --colh: 104px; }
+    .nbs .seat .citycards { --colh: 150px; }
   }
   /* wide laptops: the Log / Cities side panel beside the table; narrower ones open them from the top buttons */
   @media (min-width: 1360px) {
@@ -442,11 +443,17 @@
     .far .seat .wboard { display: none; }
     .act { height: 124px; gap: 3px; padding: 6px 8px; }
     .act .tx { -webkit-line-clamp: 1; }
+    /* a payment choice takes the description's place, rather than squashing both lines to a sliver */
+    .act:has(.pays) .tx { display: none; }
   }
+  /* phone: with a payment choice showing, the odds line gives way so the description line keeps its full height */
+  @media (max-width: 899px) { .act:has(.pays) .odds { display: none; } .act .tx, .act .odds { flex-shrink: 0; } }
   .nb .srow { overflow: hidden; }
   /* 320 px wide with 7 players: four far seats share the top row */
   @media (max-width: 360px) {
     .icon-btn { width: 31px; }
+    /* seven colours of your own cards and the coin pile side by side without overlapping */
+    .me .citycards { --mw: 30px; gap: 2px; }
     .tools { gap: 3px; }
     .far:has(.seat:nth-child(4)) .seat .wboard .stages { display: none; }
     .far:has(.seat:nth-child(4)) .seat .wboard { align-self: flex-start; }
