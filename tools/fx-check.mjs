@@ -36,6 +36,7 @@ const FAKE = () => {
 };
 
 const ctx = await b.newContext(pw.devices['iPhone 15']);
+await ctx.addInitScript(() => { try { localStorage.setItem('coach-offer:seven-wonders-first-game', 'true'); } catch (e) {} });  // the guided-game offer stays out of the way
 await ctx.addInitScript(FAKE);
 const p = await ctx.newPage();
 const errs = [];

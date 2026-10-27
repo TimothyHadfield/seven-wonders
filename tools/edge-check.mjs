@@ -26,6 +26,7 @@ const VP = {
 };
 async function open(vp, local, opts = {}) {
   const ctx = await b.newContext(VP[vp]);
+  await ctx.addInitScript(() => { try { localStorage.setItem('coach-offer:seven-wonders-first-game', 'true'); } catch (e) {} });  // the guided-game offer stays out of the way
   if (opts.blockStorage) await ctx.addInitScript(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('SecurityError'); } }); });
   else if (local !== undefined && local !== null) await ctx.addInitScript(v => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('sevenwonders:v1', v); sessionStorage.setItem('seeded', '1'); } } catch (e) {} }, local);
   if (opts.noAnim) await ctx.addInitScript(() => { try { localStorage.setItem('fx:seven-wonders', JSON.stringify({ animations: false })); } catch (e) {} });
@@ -126,6 +127,7 @@ await run('reload mid-turn restores the same state', async () => {
 });
 await run('two tabs of the same game', async () => {
   const ctx = await b.newContext(VP.phone);
+  await ctx.addInitScript(() => { try { localStorage.setItem('coach-offer:seven-wonders-first-game', 'true'); } catch (e) {} });  // the guided-game offer stays out of the way
   await ctx.addInitScript(v => { try { if (!localStorage.getItem('sevenwonders:v1')) localStorage.setItem('sevenwonders:v1', v); } catch (e) {} }, S.start3);
   const A = await ctx.newPage(); await A.goto(url); await A.waitForTimeout(800);
   const B2 = await ctx.newPage(); await B2.goto(url); await B2.waitForTimeout(800);

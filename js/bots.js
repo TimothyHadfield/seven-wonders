@@ -18,6 +18,9 @@
   const HARD = Object.assign({}, BASE, { raw1: 2.563, raw2: 1.294, man1: 2.821, man2: 1.2, coin: 0.105, low: 0.17, sci1: 1.9, sci2: 1.195,
     sciMul: 0.609, chain1: 1.025, chain2: 0.573, milNow: 0.924, milLater: 0.34, trade: 1.271, hate: 0.339, noise: 0, exact3: true,
     pay: 0.141, stageBias: 0.414, vpMul: 0.492, perMul: 0.819, sellPen: 0.516, near: 0.906, dim: 0.9 });
+  // Predictability (checked 2026-10-27, tools/ladder.js): Hard has no noise on purpose. Every deal is shuffled, so
+  // the same spot hardly ever comes back, and tie-break noise cost Hard 5-7 points of win share at 4 players
+  // (noise 0.25: 61.5% vs 67.0%; 0.1: 58.7% vs 65.5%, 400-600 games each against three Mediums).
   const LEVELS = { medium: BASE, hard: HARD };
 
   function produces(g, p, r) {

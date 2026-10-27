@@ -89,9 +89,11 @@
   // soft hyphen near the middle of long words, so narrow cards break "Forti-fications", not "Fortificatio-ns"
   // (Safari's own hyphenation isn't available everywhere, so the break points are chosen here)
   const VOW = /[aeiouy]/i;
-  const BREAK = { Marketplace: 6, Apothecary: 6, Brickyard: 5, Shipowners: 4, Magistrates: 5, Laboratory: 6 };
+  // 8-letter words got no break point before, so "Workshop" ran past a narrow overlapped card ("Vorkshop")
+  const BREAK = { Marketplace: 6, Apothecary: 6, Brickyard: 5, Shipowners: 4, Magistrates: 5, Laboratory: 6,
+    Pawnshop: 4, Stockade: 5, Barracks: 3, Workshop: 4, Aqueduct: 4, Vineyard: 4, Training: 5, Pantheon: 4, Commerce: 3, Builders: 5 };
   function softWord(w) {
-    if (w.length < 9) return w;
+    if (w.length < 8) return w;
     if (BREAK[w]) return w.slice(0, BREAK[w]) + '­' + w.slice(BREAK[w]);
     let best = -1, bestScore = 1e9;
     for (let i = 3; i <= w.length - 3; i++) {
@@ -117,6 +119,80 @@
     green: '<path d="M8 8h18a4 4 0 0 1 0 8H12v10a4 4 0 0 1-4 4z" fill="#2a7144" opacity=".45"/><circle cx="30" cy="23" r="5" fill="none" stroke="#2a7144" stroke-width="1.6" opacity=".55"/>',
     purple: '<path d="M10 4h20v20l-10-5-10 5z" fill="#643e8c" opacity=".5"/><path d="M14 9h12M14 13h12" stroke="#e9def3" stroke-width="1.2" opacity=".8"/>',
   };
+  // ---------------------------------------------------------------- one small original scene per card (40×30)
+  // Drawn for this site: a soft sky, a ground line with a shadow, and a motif in the card colour's ink with a
+  // lit side (lighter fill) and a shaded side, so the cards read as illustrations rather than flat blocks.
+  const INK = { brown: ['#6b4022', '#a4703f'], grey: ['#4f5563', '#8a90a0'], blue: ['#244f8a', '#5f8fd0'], yellow: ['#86610e', '#d2a640'],
+    red: ['#8a2b24', '#cf6a5c'], green: ['#22643b', '#5aa877'], purple: ['#55306f', '#9a74c0'] };
+  const M = {   // motifs: d = dark ink, l = light ink
+    trees: (d, l) => '<path d="M5 26l6-15 6 15z" fill="' + l + '"/><path d="M11 11l6 15h-6z" fill="' + d + '"/><path d="M15 26l8-19 8 19z" fill="' + l + '"/><path d="M23 7l8 19h-8z" fill="' + d + '"/><path d="M10 26h2v3h-2zM22 26h2v3h-2z" fill="' + d + '"/>',
+    stone: (d, l) => '<path d="M5 28l2-8h10l2 8z" fill="' + l + '"/><path d="M17 20l2 8h-3z" fill="' + d + '"/><path d="M19 28l3-11h11l2 11z" fill="' + l + '"/><path d="M33 17l2 11h-3z" fill="' + d + '"/><path d="M11 20l2-7h9l1 4" fill="' + l + '" stroke="' + d + '" stroke-width=".8"/><path d="M7 24h10M22 22h11" stroke="' + d + '" stroke-width=".7" opacity=".6"/>',
+    clay: (d, l) => '<path d="M4 28c4-6 28-6 32 0z" fill="' + d + '" opacity=".55"/><path d="M12 20h7v4h-7zM20 20h7v4h-7zM16 15h7v4h-7z" fill="' + l + '" stroke="' + d + '" stroke-width=".7"/><path d="M28 14l4 8M30 14h-4" stroke="' + d + '" stroke-width="1.2" stroke-linecap="round"/>',
+    ore: (d, l) => '<path d="M5 28V17a8 8 0 0 1 16 0v11z" fill="' + d + '"/><path d="M8 28V18a5 5 0 0 1 10 0v10z" fill="#1d1712" opacity=".85"/><path d="M23 21h12l-1.5 5h-9z" fill="' + l + '" stroke="' + d + '" stroke-width=".7"/><circle cx="26" cy="27" r="1.5" fill="' + d + '"/><circle cx="32" cy="27" r="1.5" fill="' + d + '"/><path d="M25 21l2-3h3l2 3" fill="#9aa5bb"/>',
+    glass: (d, l) => '<path d="M15 5h7v4c4 2 6 6 6 10 0 5-4 8-9.5 8S9 24 9 19c0-4 2-8 6-10z" fill="' + l + '" opacity=".9"/><path d="M22 9c4 2 6 6 6 10 0 5-4 8-9.5 8 3-2 5-5 5-9s-1-7-1.5-9z" fill="' + d + '" opacity=".5"/><path d="M14 13c-2 2-2.5 5-2 8" stroke="#eef9ff" stroke-width="1.2" stroke-linecap="round" fill="none"/><path d="M29 10l4-3M31 14h4" stroke="' + l + '" stroke-width="1" stroke-linecap="round"/>',
+    loom: (d, l) => '<path d="M7 5v23M33 5v23M5 7h30M5 26h30" stroke="' + d + '" stroke-width="2" stroke-linecap="round"/><path d="M10 8v17M13 8v17M16 8v17M19 8v17M22 8v17M25 8v17M28 8v17" stroke="' + l + '" stroke-width=".8"/><path d="M9 13h22v6H9z" fill="' + l + '" opacity=".6"/>',
+    press: (d, l) => '<path d="M8 8h22v16H8z" fill="#f4e7c2" stroke="' + d + '" stroke-width=".8"/><path d="M6 6a2.5 2.5 0 0 1 0 5h3V6zM32 21a2.5 2.5 0 0 1 0 5h-3v-5z" fill="' + l + '" stroke="' + d + '" stroke-width=".7"/><path d="M12 12h14M12 15h14M12 18h10" stroke="' + d + '" stroke-width=".9" stroke-linecap="round" opacity=".7"/>',
+    temple: (d, l, n) => { n = n || 4; let c = ''; const w = 26 / n; for (let i = 0; i < n; i++) c += '<rect x="' + (8 + i * w + w * .25).toFixed(1) + '" y="12" width="' + (w * .5).toFixed(1) + '" height="12" fill="' + (i % 2 ? d : l) + '"/>'; return '<path d="M5 11L20 3l15 8z" fill="' + l + '"/><path d="M20 3l15 8H20z" fill="' + d + '" opacity=".6"/><path d="M6 11h28v1.6H6z" fill="' + d + '"/>' + c + '<path d="M5 24h30v2H5zM3 26h34v2.5H3z" fill="' + d + '"/>'; },
+    statue: (d, l) => '<path d="M13 26h14v3H13z" fill="' + d + '"/><path d="M15 22h10v4H15z" fill="' + l + '"/><circle cx="20" cy="6" r="2.4" fill="' + l + '"/><path d="M17 9h6l1 7-2 1v5h-4v-5l-2-1z" fill="' + l + '"/><path d="M20 9h3l1 7-2 1v5h-2z" fill="' + d + '" opacity=".55"/><path d="M23 10l4-5" stroke="' + d + '" stroke-width="1.3" stroke-linecap="round"/>',
+    altar: (d, l) => '<path d="M10 18h20v10H10z" fill="' + l + '"/><path d="M22 18h8v10h-8z" fill="' + d + '" opacity=".5"/><path d="M8 16h24v3H8z" fill="' + d + '"/><path d="M20 4c3 4 5 6 2 11h-4c-3-5 0-6 2-11z" fill="#f0a347"/><path d="M20 8c1.5 2.5 2 4 .5 7h-1c-1.5-3-.5-4 .5-7z" fill="#ffe08a"/>',
+    theater: (d, l) => '<path d="M3 27a17 17 0 0 1 34 0z" fill="' + l + '"/><path d="M7 27a13 13 0 0 1 26 0M11 27a9 9 0 0 1 18 0" stroke="' + d + '" stroke-width="1.2" fill="none"/><path d="M15 27a5 5 0 0 1 10 0z" fill="' + d + '"/>',
+    arches: (d, l) => '<path d="M3 8h34v4H3z" fill="' + d + '"/><path d="M4 12h32v16h-4v-8a4 4 0 0 0-8 0v8h-4v-8a4 4 0 0 0-8 0v8H4z" fill="' + l + '"/><path d="M3 9h34" stroke="#9fd3f0" stroke-width="1.6"/>',
+    gardens: (d, l) => '<path d="M4 28h32v-3H4z" fill="' + d + '"/><circle cx="11" cy="15" r="6" fill="' + l + '"/><circle cx="21" cy="11" r="7" fill="' + d + '" opacity=".75"/><circle cx="30" cy="16" r="5" fill="' + l + '"/><path d="M11 21v4M21 18v7M30 21v4" stroke="' + d + '" stroke-width="1.4"/>',
+    well: (d, l) => '<path d="M8 9L20 3l12 6z" fill="' + d + '"/><path d="M11 9v10M29 9v10" stroke="' + d + '" stroke-width="1.6"/><path d="M8 19h24v9H8z" fill="' + l + '"/><path d="M8 22h24M8 25h24M14 19v3M22 22v3M26 19v3" stroke="' + d + '" stroke-width=".7"/><path d="M20 9v6" stroke="' + d + '" stroke-width=".8"/><path d="M18 15h4v3h-4z" fill="' + d + '"/>',
+    pot: (d, l) => '<path d="M12 10h16l-2 3c4 2 5 6 5 9 0 4-4 6-11 6s-11-2-11-6c0-3 1-7 5-9z" fill="' + l + '"/><path d="M26 13c4 2 5 6 5 9 0 4-4 6-11 6 5-1 7-4 7-8s-1-6-1-7z" fill="' + d + '" opacity=".5"/><circle cx="16" cy="8" r="2.6" fill="#e2b33c"/><circle cx="22" cy="7" r="2.6" fill="#f0c859"/>',
+    stakes: (d, l) => { let s = ''; for (let i = 0; i < 7; i++) { const x = 5 + i * 4.4; s += '<path d="M' + x + ' 28V' + (12 + (i % 2) * 2) + 'l2-3 2 3V28z" fill="' + (i % 2 ? d : l) + '"/>'; } return s + '<path d="M4 17h32M4 23h32" stroke="' + d + '" stroke-width="1"/>'; },
+    tent: (d, l) => '<path d="M4 27L14 9l10 18z" fill="' + l + '"/><path d="M14 9l10 18h-10z" fill="' + d + '" opacity=".6"/><path d="M12 27l2-6 2 6z" fill="#2b1810"/><path d="M20 27l8-14 8 14z" fill="' + l + '"/><path d="M28 13l8 14h-8z" fill="' + d + '" opacity=".6"/><path d="M14 9V5l4 1.5-4 1.5" fill="' + d + '"/>',
+    tower: (d, l) => '<path d="M13 28V10h14v18z" fill="' + l + '"/><path d="M20 10h7v18h-7z" fill="' + d + '" opacity=".5"/><path d="M11 10V6h3v2h3V6h3v2h3V6h3v2h3V6h0v4z" fill="' + d + '"/><path d="M18 28v-6a2 2 0 0 1 4 0v6z" fill="#2b1810"/><path d="M19 13h2v4h-2z" fill="#2b1810"/>',
+    walls: (d, l) => '<path d="M2 28V14h36v14z" fill="' + l + '"/><path d="M2 14V10h4v2h4v-2h4v2h4v-2h4v2h4v-2h4v2h4v-2h4v4z" fill="' + d + '"/><path d="M2 19h36M2 24h36M8 14v5M16 19v5M24 14v5M32 19v5M12 24v4M28 24v4" stroke="' + d + '" stroke-width=".7" opacity=".7"/>',
+    horseshoe: (d, l) => '<path d="M11 6v10a9 9 0 0 0 18 0V6h-5v10a4 4 0 0 1-8 0V6z" fill="' + l + '" stroke="' + d + '" stroke-width="1"/><circle cx="13.5" cy="10" r=".9" fill="' + d + '"/><circle cx="13.5" cy="15" r=".9" fill="' + d + '"/><circle cx="26.5" cy="10" r=".9" fill="' + d + '"/><circle cx="26.5" cy="15" r=".9" fill="' + d + '"/>',
+    target: (d, l) => '<circle cx="17" cy="16" r="11" fill="' + l + '"/><circle cx="17" cy="16" r="7.5" fill="#f4dcd6"/><circle cx="17" cy="16" r="4" fill="' + d + '"/><path d="M17 16L36 4" stroke="#3a2a1a" stroke-width="1.3"/><path d="M33 3l4 1-2 3z" fill="#3a2a1a"/>',
+    swords: (d, l) => '<path d="M8 6l19 19M32 6L13 25" stroke="' + l + '" stroke-width="2.6" stroke-linecap="round"/><path d="M8 6l19 19" stroke="#fff" stroke-width=".7" opacity=".6"/><path d="M24 26l5-5M11 21l5 5" stroke="' + d + '" stroke-width="2.6" stroke-linecap="round"/>',
+    fort: (d, l) => '<path d="M4 28V15h8v-5h16v5h8v13z" fill="' + l + '"/><path d="M20 10h8v18H20z" fill="' + d + '" opacity=".45"/><path d="M3 15v-3h2v1.5h2V12h2v1.5h2V12h2v3zM27 15v-3h2v1.5h2V12h2v1.5h2V12h2v3zM11 10V7h2v1.5h2V7h2v1.5h2V7h2v1.5h2V7h2v1.5h2V7h2v3z" fill="' + d + '"/><path d="M17 28v-7a3 3 0 0 1 6 0v7z" fill="#2b1810"/>',
+    arena: (d, l) => '<ellipse cx="20" cy="18" rx="17" ry="9" fill="' + l + '"/><ellipse cx="20" cy="18" rx="11" ry="5" fill="#f1dcc0"/><path d="M3 18v4c0 5 8 6.5 17 6.5s17-1.5 17-6.5v-4c0 5-8 9-17 9s-17-4-17-9z" fill="' + d + '"/><path d="M8 25v-4M14 27v-4M20 27.5v-4M26 27v-4M32 25v-4" stroke="' + l + '" stroke-width="1"/>',
+    arsenal: (d, l) => '<path d="M12 6l8 3v7c0 6-4 9-8 11-4-2-8-5-8-11V9z" fill="' + l + '"/><path d="M12 6l8 3v7c0 6-4 9-8 11z" fill="' + d + '" opacity=".5"/><path d="M26 28L33 4M24 10l9 3" stroke="' + d + '" stroke-width="1.6" stroke-linecap="round"/><path d="M32 2l3 3-3 1z" fill="' + d + '"/>',
+    catapult: (d, l) => '<path d="M5 24h26" stroke="' + d + '" stroke-width="2.4"/><circle cx="9" cy="26" r="2.6" fill="' + d + '"/><circle cx="27" cy="26" r="2.6" fill="' + d + '"/><path d="M12 24l6-10 2 10" fill="' + l + '"/><path d="M18 15L33 5" stroke="' + d + '" stroke-width="2" stroke-linecap="round"/><circle cx="34" cy="4.5" r="2.6" fill="' + l + '"/>',
+    compass: (d, l) => '<circle cx="20" cy="6" r="2.6" fill="none" stroke="' + d + '" stroke-width="1.6"/><path d="M18.8 8L11 27M21.2 8L29 27" stroke="' + d + '" stroke-width="2" stroke-linecap="round"/><path d="M13.5 20h13" stroke="' + l + '" stroke-width="1.4"/><path d="M8 28a16 9 0 0 1 24 0" stroke="' + l + '" stroke-width="1" fill="none" stroke-dasharray="1.5 1.5"/>',
+    gear: (d, l) => '<g transform="translate(14 16)"><path d="M0-11l2 3 3.5-1 .6 3.5 3.4 1.4-1.4 3.2 2 3-3 2 .4 3.5-3.5.3-1.4 3.3-3-1.7-3 1.7-1.4-3.3-3.5-.3.4-3.5-3-2 2-3-1.4-3.2 3.4-1.4.6-3.5 3.5 1z" fill="' + l + '"/><circle r="3.6" fill="#e3f2e6"/></g><g transform="translate(29 9) scale(.6)"><path d="M0-11l2 3 3.5-1 .6 3.5 3.4 1.4-1.4 3.2 2 3-3 2 .4 3.5-3.5.3-1.4 3.3-3-1.7-3 1.7-1.4-3.3-3.5-.3.4-3.5-3-2 2-3-1.4-3.2 3.4-1.4.6-3.5 3.5 1z" fill="' + d + '"/><circle r="3.6" fill="#e3f2e6"/></g>',
+    tablet: (d, l) => '<path d="M10 4h16a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H10z" fill="' + l + '"/><path d="M26 4a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2h-3z" fill="' + d + '" opacity=".5"/><path d="M13 9h10M13 13h10M13 17h10M13 21h7" stroke="#e3f2e6" stroke-width="1.2" stroke-linecap="round"/><path d="M30 26l6-16" stroke="' + d + '" stroke-width="1.4" stroke-linecap="round"/>',
+    amphora: (d, l) => '<path d="M16 4h8v3c5 3 7 8 7 12 0 5-4 9-11 9s-11-4-11-9c0-4 2-9 7-12z" fill="' + l + '"/><path d="M24 7c5 3 7 8 7 12 0 5-4 9-11 9 5-2 7-6 7-10s-1-8-3-11z" fill="' + d + '" opacity=".45"/><path d="M15 9c-4 0-5 4-3 6M25 9c4 0 5 4 3 6" stroke="' + d + '" stroke-width="1.3" fill="none"/><path d="M11 17h18" stroke="' + d + '" stroke-width="1.2" opacity=".6"/>',
+    stall: (d, l) => '<path d="M5 12l3-7h24l3 7z" fill="' + l + '"/><path d="M8 5l-3 7h5l2-7M16 5l-1 7h5V5M24 5l1 7h5l-2-7" fill="' + d + '" opacity=".55"/><path d="M7 12v16M33 12v16" stroke="' + d + '" stroke-width="1.6"/><path d="M7 21h26v3H7z" fill="' + d + '"/><circle cx="13" cy="19" r="2" fill="#c8673f"/><circle cx="19" cy="19" r="2" fill="#9ccf6a"/><circle cx="25" cy="19" r="2" fill="#e2b33c"/>',
+    cart: (d, l) => '<path d="M6 13h22v9H6z" fill="' + l + '"/><path d="M8 13l3-5h12l3 5" fill="' + d + '" opacity=".6"/><circle cx="12" cy="24" r="3.4" fill="none" stroke="' + d + '" stroke-width="1.6"/><circle cx="23" cy="24" r="3.4" fill="none" stroke="' + d + '" stroke-width="1.6"/><path d="M28 16h8" stroke="' + d + '" stroke-width="1.6" stroke-linecap="round"/>',
+    camel: (d, l) => '<path d="M6 17c2-6 6-6 8-2 2-5 7-5 9 0h4l3-5 3 1-1 3-4 4v9h-2v-7h-12v7h-2v-7c-3-1-5-2-6-3z" fill="' + l + '"/><path d="M14 15c2-5 7-5 9 0" fill="' + d + '" opacity=".5"/><path d="M2 28h36" stroke="' + d + '" stroke-width="1" opacity=".5"/>',
+    grapes: (d, l) => '<path d="M20 4v4M20 6c3-2 6-2 8 0" stroke="#4f7a2c" stroke-width="1.4" fill="none"/>' + [[16, 11], [21, 11], [26, 11], [18.5, 15.5], [23.5, 15.5], [16, 20], [21, 20], [18.5, 24.5]].map(p => '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="2.8" fill="' + l + '" stroke="' + d + '" stroke-width=".6"/>').join(''),
+    ship: (d, l) => '<path d="M4 20h32l-5 7H9z" fill="' + d + '"/><path d="M20 3v17M20 4l11 13H20z" fill="' + l + '"/><path d="M20 3v17" stroke="' + d + '" stroke-width="1.2"/><path d="M2 28c3-2 5-2 8 0s5 2 8 0 5-2 8 0 5 2 8 0" stroke="#5f8fd0" stroke-width="1.2" fill="none"/>',
+    lighthouse: (d, l) => '<path d="M15 28l2-18h6l2 18z" fill="' + l + '"/><path d="M20 10h3l2 18h-5z" fill="' + d + '" opacity=".45"/><path d="M16 10h8V6h-8z" fill="' + d + '"/><circle cx="20" cy="5" r="2" fill="#ffd56b"/><path d="M20 5L4 1M20 5L36 1M20 5L5 9M20 5l15 4" stroke="#ffd56b" stroke-width=".8" opacity=".75"/>',
+    scales: (d, l) => '<path d="M20 4v21M13 28h14" stroke="' + d + '" stroke-width="1.8" stroke-linecap="round"/><path d="M7 8h26" stroke="' + d + '" stroke-width="1.4"/><path d="M7 8l-4 9h8zM33 8l-4 9h8z" fill="none" stroke="' + d + '" stroke-width=".8"/><path d="M2 17a5 2.5 0 0 0 10 0zM28 17a5 2.5 0 0 0 10 0z" fill="' + l + '"/>',
+    helmet: (d, l) => '<path d="M9 22c0-9 5-14 11-14s11 5 11 14v4h-6v-6h-10v6H9z" fill="' + l + '"/><path d="M20 8c6 0 11 5 11 14v4h-6v-6h-5z" fill="' + d + '" opacity=".5"/><path d="M14 6c2-4 10-4 12 0" stroke="#cf4b41" stroke-width="3" fill="none" stroke-linecap="round"/>',
+    banner: (d, l, sym) => '<path d="M11 3h18v21l-9-5-9 5z" fill="' + l + '"/><path d="M20 3h9v21l-9-5z" fill="' + d + '" opacity=".45"/><path d="M9 3h22" stroke="' + d + '" stroke-width="1.8" stroke-linecap="round"/>' + (sym || ''),
+  };
+  // which motif each card shows (by name), else by what it makes / its science symbol, else by colour
+  const BY_NAME = { Statue: 'statue', Altar: 'altar', Theater: 'theater', Baths: 'arches', Aqueduct: 'arches', Gardens: 'gardens', Well: 'well', Pawnshop: 'pot',
+    Temple: ['temple', 4], Courthouse: ['temple', 5], Senate: ['temple', 6], 'Town Hall': ['temple', 5], Pantheon: ['temple', 6], Palace: ['temple', 7],
+    Stockade: 'stakes', Barracks: 'tent', 'Guard Tower': 'tower', Walls: 'walls', Stables: 'horseshoe', 'Archery Range': 'target', 'Training Ground': 'swords',
+    Fortifications: 'fort', Castrum: 'fort', Circus: 'arena', Arsenal: 'arsenal', 'Siege Workshop': 'catapult',
+    Tavern: 'amphora', 'East Trading Post': 'cart', 'West Trading Post': 'cart', Marketplace: 'stall', Bazar: 'stall', Caravansery: 'camel', Forum: ['temple', 3],
+    Vineyard: 'grapes', Haven: 'ship', Lighthouse: 'lighthouse', 'Chamber of Commerce': 'scales', Arena: 'arena', Ludus: 'helmet' };
+  const RES_MOTIF = { W: 'trees', S: 'stone', C: 'clay', O: 'ore', G: 'glass', L: 'loom', P: 'press' };
+  const GUILD_SYM = { brown: 'stone', grey: 'loom', blue: 'temple', green: 'compass', red: 'swords', yellow: 'scales', stage: 'temple', defeat: 'swords' };
+  function pic(c) {
+    const ink = INK[c.color] || INK.brown, d = ink[0], l = ink[1];
+    const ground = '<ellipse cx="20" cy="28.5" rx="17" ry="1.8" fill="#000" opacity=".12"/>';
+    const by = BY_NAME[c.name];
+    let body = '';
+    if (by) body = Array.isArray(by) ? M[by[0]](d, l, by[1]) : M[by](d, l);
+    else if (c.e.prod) {
+      const rs = c.e.prod.replace(/\//g, '').split('').filter((r, i, a) => a.indexOf(r) === i);
+      if (rs.length === 1) body = M[RES_MOTIF[rs[0]]](d, l);
+      else body = rs.slice(0, 2).map((r, i) => '<g transform="translate(' + (i ? 19 : 1) + ' 9) scale(.5)">' + M[RES_MOTIF[r]](d, l) + '</g>').join('');
+    } else if (c.e.sci) body = M[c.e.sci](d, l);
+    else if (c.color === 'purple') {
+      const of = c.e.per ? c.e.per[0].of : c.e.wild ? 'green' : 'stage';
+      const m = M[GUILD_SYM[of] || 'temple'];
+      body = M.banner(d, l, '<g transform="translate(13 5) scale(.35)">' + m('#f3ead8', '#fff') + '</g>');
+    } else return PIC[c.color] || '';
+    return ground + body;
+  }
+
   // a card face laid out like the real card: effect banner across the top, cost strip down the top-left,
   // a picture in the middle, the name on a scroll at the bottom. o: {cls, attr, size, badge}
   function face(c, o) {
@@ -127,7 +203,7 @@
     return '<div class="card tbl-card ' + c.color + ' ' + (o.cls || '') + '"' + (o.attr || '') + '>' +
       '<div class="top">' + effect(c) + '</div>' +
       '<div class="cst' + (nCost >= 4 ? ' many' : '') + '">' + cost(c) + '</div>' +
-      '<svg class="pic" viewBox="0 0 40 30" preserveAspectRatio="xMidYMax meet" aria-hidden="true">' + (PIC[c.color] || '') + '</svg>' +
+      '<svg class="pic" viewBox="0 0 40 30" preserveAspectRatio="xMidYMax meet" aria-hidden="true">' + pic(c) + '</svg>' +
       // smaller type when the name is long or has a word of 8+ letters, so no word is ever split mid-way ("Worksho-p")
       '<div class="nm' + (c.name.length > 9 || c.name.split(' ').some(w => w.length >= 8) ? ' long' : '') + '" lang="en">' + softName(c.name) + '</div>' +
       (o.size === 'big' ? from + chain : '') + (o.badge || '') + '</div>';
@@ -135,7 +211,8 @@
   // a built card in a city column: only its top banner shows, like a real overlapped stack
   function mini(c, o) {
     o = o || {};
-    return '<div class="mc ' + c.color + (o.cls ? ' ' + o.cls : '') + '"' + (o.attr || '') + ' title="' + c.name + '"><div class="top">' + effect(c) + '</div></div>';
+    return '<div class="mc ' + c.color + (o.cls ? ' ' + o.cls : '') + '"' + (o.attr || '') + ' title="' + c.name + '"><div class="top">' + effect(c) + '</div><b class="mn" lang="en">' + softName(c.name) + '</b>' +
+      '<svg class="mp" viewBox="0 0 40 30" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' + pic(c) + '</svg></div>';
   }
   // the back of an Age card: our own pattern, the Age numeral in the middle
   function back(age, cls) { return '<div class="tbl-card tbl-back swb a' + (age || 1) + (cls ? ' ' + cls : '') + '"><i>' + ['', 'I', 'II', 'III'][age || 1] + '</i></div>'; }
@@ -157,5 +234,5 @@
   // the site icon (also used in the header)
   const ICON = '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#1a1e2b"/><path d="M12 50l20-34 20 34z" fill="#f0b354"/><path d="M32 16l20 34H38z" fill="#c98f36"/><circle cx="47" cy="15" r="5" fill="#6ea8fe"/><path d="M8 52h48" stroke="#6ea8fe" stroke-width="3" stroke-linecap="round"/></svg>';
 
-  root.SWArt = { res, coin, shield, sci, wild, laurel, chip, cost, resCost, effect, stageEffect, face, mini, back, emblem, stageIc, COLOR_HEX, ICON, svg, DEFEAT };
+  root.SWArt = { res, coin, shield, sci, wild, laurel, chip, cost, resCost, effect, stageEffect, face, mini, back, emblem, pic, stageIc, COLOR_HEX, ICON, svg, DEFEAT };
 })(typeof self !== 'undefined' ? self : this);

@@ -60,6 +60,7 @@ const measure = () => {
 for (const [st, local] of [['late7', S.age3_7], ['mid4', S.mid4], ['late7t6', S.age3t6_7]]) {
   for (const vp of Object.keys(VP)) {
     const ctx = await b.newContext(VP[vp]);
+    await ctx.addInitScript(() => { try { localStorage.setItem('coach-offer:seven-wonders-first-game', 'true'); } catch (e) {} });  // the guided-game offer stays out of the way
     await ctx.addInitScript(v => { try { localStorage.setItem('sevenwonders:v1', v); localStorage.setItem('fx:seven-wonders', JSON.stringify({ animations: false })); } catch (e) {} }, local);
     const p = await ctx.newPage();
     const errs = [];

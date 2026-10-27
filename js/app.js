@@ -40,6 +40,9 @@
         if (out.score != null && (typeof out.score !== 'object' || Array.isArray(out.score))) out.score = null;
         if (out.game != null && (typeof out.game !== 'object' || !out.game.state)) out.game = null;
         if (out.game && !Array.isArray(out.game.dec)) out.game.dec = [];
+        if (out.game && !Array.isArray(out.game.undo)) out.game.undo = [];
+        if (out.game && !Array.isArray(out.game.acts)) { out.game.acts = null; out.game.init = null; }
+        if (out.last && !(out.last.init && typeof out.last.init === 'object' && Array.isArray(out.last.acts))) { out.last.init = null; out.last.acts = null; }
         if (![1, 2].includes(st.ed)) st.ed = def.ed;
         if (!['default', 'random', 'choose', 'A', 'B'].includes(st.sides)) st.sides = def.sides;
         if (!['easy', 'medium', 'hard'].includes(st.level)) st.level = def.level;
@@ -157,6 +160,19 @@
       if (!el || !FX.settings.animations || !el.animate) return;
       try { el.animate([{ transform: 'translateX(' + (s.dir * 36) + 'px)' }, { transform: 'none' }], { duration: Math.round(300 * fxSp()), easing: 'ease-out' }); } catch (e) { /* ignore */ }
     },
+    // end of an age: a banner over the table, your battle against each neighbour (+1/+3/+5, −1 or a tie)
+    battle(s) {
+      if (!FX.settings.animations || ui.tab !== 'play' || !$('#game')) return;
+      const old = $('.battle-banner'); if (old) old.remove();
+      const side = (r, arrow) => '<span class="bb-side ' + (r.v > 0 ? 'won' : r.v < 0 ? 'lost' : 'tie') + '">' + (arrow === '◀' ? arrow + ' ' : '') + esc(r.name.replace(/^Computer /, 'C')) +
+        ' <b>' + (r.v > 0 ? '+' + r.v : r.v < 0 ? '−1' : 'tie') + '</b>' + (arrow === '▶' ? ' ' + arrow : '') + '</span>';
+      const el = document.createElement('div');
+      el.className = 'battle-banner'; el.setAttribute('aria-hidden', 'true');
+      el.innerHTML = '<div class="bb-in">' + A.shield() + '<b class="bb-t">Battles · Age ' + AGE[s.age] + '</b><div class="bb-row">' + side(s.L, '◀') + side(s.R, '▶') + '</div></div>';
+      el.style.setProperty('--bb', Math.round(1700 * fxSp()) + 'ms');
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), Math.round(1800 * fxSp()));
+    },
     // end of game: each score row counts up in turn
     scores() {
       const rows = Array.from(document.querySelectorAll('#v-play table.sc tbody tr'));
@@ -244,6 +260,8 @@
   }
   window.addEventListener('popstate', e => {
     const s = e.state || { tab: 'play' };
+    if (ui.skipPop) { ui.skipPop = false; return; }   // our own step back after a rules sheet or My stats closed by hand
+    if ((window.COACH && COACH.rulesOpen()) || (window.Profile && window.Profile.isOpen())) { closeOverlays(); if (s.tab === ui.tab) return; }
     if ($('#sheet')) { closeSheet(true); if (s.tab === ui.tab) return; }
     if (table && !s.g) { guard('game'); showTab('play', false); return; }  // mid-game: Back stays in the game
     if (!table && ui.online && !s.g) {
@@ -300,6 +318,8 @@
       '<div class="seg" data-set="level">' + ['easy', 'medium', 'hard'].map(l => '<button aria-pressed="' + (s.level === l) + '" data-v="' + l + '">' + cap(l) + '<small>' + LEVEL_NOTE[l] + '</small></button>').join('') + '</div>' +
       '<button class="btn primary" data-start style="width:100%">Deal</button>' +
       '<button class="btn" data-on="open" style="width:100%">Play online</button>' +
+      (SP || SC ? '<div class="row">' + (SP ? '<button class="btn small grow" data-daily>' + (dailyDone() ? 'Daily ✓' : 'Daily') + '</button>' : '') +
+        (SC ? '<button class="btn small grow" data-rules>Rules</button>' : '') + (SP ? '<button class="btn small grow" data-stats>My stats</button>' : '') + '</div>' : '') +
       '<p class="muted small" style="margin:0">' + (s.ed === 1 ? '1st' : '2nd') + ' edition · sides ' + esc(sidesWord()) + ' · change in Settings</p>' +
       '</div>' +
       (store.last ? '<button class="btn ghost" data-go="study">Study your last game</button>' : '') +
@@ -315,19 +335,127 @@
     return s === 'choose' ? 'chosen' : s === 'random' ? 'random' : s + ' only';
   }
   function sidesOpt() { const s = store.settings.sides; return s === 'default' ? undefined : s; }
-  function startGame() {
-    const s = store.settings;
-    const n = s.n;
+  // opt (all optional): { n, level, ed, sides, seed, daily: 'YYYY-MM-DD', tutorial: true }; the rest from Settings.
+  // The game keeps how it was dealt (init) and your actions (acts), so Study can replay it turn by turn.
+  function startGame(opt) {
+    const o = opt || {}, s = store.settings;
+    const n = o.n || s.n, level = o.level || s.level;
+    if (window.COACH && COACH.closeOffer) COACH.closeOffer();   // the guided-game offer never stays over a game
     const names = ['You'];
     const bots = [null];
-    for (let i = 1; i < n; i++) { names.push('Computer ' + i); bots.push(s.level); }
-    const st = E.newGame({ ed: s.ed, n, names, bots, sides: sidesOpt(), seed: (Math.random() * 4294967296) >>> 0 });
-    store.game = { state: st, dec: [] };
+    for (let i = 1; i < n; i++) { names.push('Computer ' + i); bots.push(level); }
+    const init = { ed: o.ed || s.ed, n, names, bots, sides: o.sides || sidesOpt(), seed: o.seed != null ? o.seed >>> 0 : (Math.random() * 4294967296) >>> 0 };
+    if (init.sides === undefined) delete init.sides;
+    const st = E.newGame(JSON.parse(JSON.stringify(init)));
+    store.game = { state: st, dec: [], undo: [], init, acts: [], level, helped: false, recorded: false, finished: false, daily: o.daily || null, tutorial: !!o.tutorial };
     save();
     table = new LocalTable(store.game);
     ME = 0; resetSel(); ui.prevKey = ''; ui.prevCities = null; ui.fx.prev = Sfx.empty(n);
     guard('game');
     renderPlay();
+  }
+  // a game whose result still has to go to My stats (left mid-game) is recorded before it is dropped
+  function dropGame() {
+    if (table && !table.online) recordGame();
+    table = null; store.game = null; save(); resetSel();
+  }
+
+  // ---- Undo (games vs computers only; not in the Daily or the guided game). Undo takes back your last pick,
+  // after which you have seen the next hand, so a game with Undo counts as "with help" in My stats.
+  const UNDO_MAX = 6;
+  function undoShown() { const g = store.game; return !!(table && !table.online && g && !g.daily && !g.tutorial); }
+  function canUndo() { const g = store.game; return undoShown() && !!(g.undo && g.undo.length) && !g.finished; }
+  function undo() {
+    if (!canUndo()) return;
+    const g = store.game, u = g.undo.pop();
+    let st;
+    try { st = JSON.parse(u.state); E.view(st, ME); } catch (e) { g.undo = []; save(); renderPlay(); return; }
+    g.state = st; g.helped = true;
+    g.dec.length = Math.min(g.dec.length, u.dec);
+    if (g.acts) g.acts.length = Math.min(g.acts.length, u.acts);
+    resetSel(); ui.prevKey = ''; ui.prevCities = null; ui.fx.prev = null;   // no sounds for cards going back
+    save(); renderPlay();
+  }
+
+  // ---- My stats (js/profile.js + js/swprofile.js): one result per game vs computers. Leaving after your first
+  // pick counts as a loss; hint, card values or Undo make it "with help" (not rated); the guided game never counts.
+  const SP = window.SWProfile && window.Profile ? window.SWProfile : null;
+  function recordGame() {
+    const g = store.game;
+    if (!SP || !g || !g.state || g.recorded || g.tutorial || !g.level || !g.init) return;
+    g.recorded = true;
+    try {
+      const v = E.view(g.state, 0);
+      if (v.phase !== 'over' && !(g.acts || []).some(a => a.t !== 'side')) { save(); return; } // dealt and left at once: not a game
+      const p = v.players[0];
+      const r = SP.result({ v, me: 0, level: g.level, helped: g.helped, daily: !!g.daily, stagesTotal: p.side ? E.stagesOf(v, p).length : 0 });
+      if (g.daily) r.date = g.daily;   // a Daily finished after midnight still belongs to the day it was dealt
+      window.Profile.recordResult(r);
+    } catch (e) { /* the stats never stop the game */ }
+    save();
+  }
+  function dailyDone() { try { return !!(window.Profile && window.Profile.daily.played()); } catch (e) { return false; } }
+  function busyMsg() {
+    if (table && table.online) return 'Leave the online room first';
+    if (table && store.game && !store.game.finished) return 'Finish or quit this game first';
+    return '';
+  }
+  function startDaily() {
+    const P = window.Profile;
+    if (!P || !SP) return;
+    if (dailyDone()) { openStats('daily'); return; }
+    const m = busyMsg(); if (m) { toast(m); return; }
+    if (P.isOpen()) P.closePanel();
+    if (table) dropGame();
+    const day = P.daily.date(), D = SP.DAILY;
+    if (ui.tab !== 'play') showTab('play', true);
+    startGame({ daily: day, seed: P.daily.seed(day, 'seven-wonders-deal') >>> 0, n: D.n, level: D.level, ed: D.ed, sides: D.sides });
+  }
+
+  // ---- Rules sheet + guided first game (js/coach.js + js/swcoach.js)
+  const SC = window.COACH && window.SWCoach ? window.SWCoach : null;
+  function pushModal() { try { history.pushState(Object.assign({ tab: ui.tab }, history.state || {}, { sheet: 1 }), '', '#' + ui.tab); } catch (e) { /* file:// */ } }
+  function modalClosedByHand() {
+    if (history.state && history.state.sheet) { ui.skipPop = true; try { history.back(); } catch (e) { ui.skipPop = false; } }
+  }
+  function closeOverlays() {
+    closeSheet(true);
+    document.querySelectorAll('.confirm-back, .pop').forEach(el => el.remove());
+    if (window.COACH && COACH.rulesOpen()) { ui.closingQuiet = true; COACH.closeRules(); ui.closingQuiet = false; }
+    if (window.Profile && window.Profile.isOpen()) { ui.closingQuiet = true; window.Profile.closePanel(); ui.closingQuiet = false; }
+  }
+  const modalOpen = () => !!$('#sheet') || !!$('.confirm-back') || !!(window.COACH && COACH.rulesOpen()) || !!(window.Profile && window.Profile.isOpen());
+  function openRules() {
+    if (!SC) return;
+    const had = history.state && history.state.sheet;
+    closeOverlays();
+    COACH.rules(Object.assign({}, SC.RULES, { onClose: () => { if (!ui.closingQuiet) modalClosedByHand(); } }));
+    if (!had) pushModal();
+  }
+  function openStats(t) {
+    if (!window.Profile) return;
+    const had = history.state && history.state.sheet;
+    closeOverlays();
+    window.Profile.openPanel(t ? { tab: t } : undefined);
+    if (window.Profile.isOpen() && !had) pushModal();
+  }
+  let tour = null;
+  function startTutorial() {
+    if (!tour) return;
+    const m = busyMsg(); if (m && !(store.game && store.game.tutorial)) { toast(m); return; }
+    if (table) dropGame();
+    tour.reset();
+    if (ui.tab !== 'play') showTab('play', true);
+    const G = SC.GAME;
+    startGame({ tutorial: true, seed: G.seed, n: G.n, level: G.level, ed: G.ed, sides: G.sides });
+    tour.start(0);
+  }
+  function offerTutorial() {
+    if (!SC || !tour || table || ui.online || ui.tab !== 'play' || COACH.offered(SC.ID)) return;
+    setTimeout(() => {
+      if (table || ui.online || ui.tab !== 'play' || modalOpen()) return;
+      COACH.offer({ id: SC.ID, title: 'New to 7 Wonders?', text: 'Play one guided game against two Easy computers. Each age\'s scoring is explained as it happens.', yes: 'Teach me', no: 'No thanks', onYes: startTutorial });
+    }, 600);
   }
   vPlay.addEventListener('click', e => {
     const t = e.target;
@@ -338,6 +466,9 @@
       save(); renderPlay(); return;
     }
     if (t.closest('[data-start]')) { startGame(); return; }
+    if (t.closest('[data-daily]')) { startDaily(); return; }
+    if (t.closest('[data-rules]')) { openRules(); return; }
+    if (t.closest('[data-stats]')) { openStats(); return; }
     const go = t.closest('[data-go]');
     if (go) { showTab(go.dataset.go, true); return; }
     const on = t.closest('[data-on]');
@@ -468,7 +599,8 @@
   function cityCols(v, p, fresh) {
     const by = {};
     for (const id of p.city) { const c = card(v, id); (by[c.color] = by[c.color] || []).push(id); }
-    return '<div class="citycards">' + Cd.COLORS.filter(col => by[col]).map(col => '<div class="ccol" style="--n:' + by[col].length + '">' +
+    const rows = Math.max(1, ...Object.values(by).map(a => a.length));
+    return '<div class="citycards" style="--cols:' + Math.max(4, Object.keys(by).length) + ';--rows:' + rows + '">' + Cd.COLORS.filter(col => by[col]).map(col => '<div class="ccol" style="--n:' + by[col].length + '">' +
       by[col].map((id, i) => A.mini(card(v, id), { cls: fresh && fresh.has(id) ? 'new' : '', attr: ' style="--i:' + i + '"' })).join('') + '</div>').join('') + '</div>';
   }
   function milTokens(p) {
@@ -621,6 +753,8 @@
         '<div class="btns" style="grid-template-columns:1fr 1fr"><button class="btn primary" data-dbuild' + (id ? '' : ' disabled') + '>Build free</button><button class="btn" data-dskip>Skip</button></div>';
     } else if ((v.phase === 'pick' || v.phase === 'seventh') && toAct) {
       const ranked = (store.settings.values || ui.hint) ? rankNow(v) : null;
+      // the card values on show make this game "with help" in My stats
+      if (store.settings.values && !table.online && store.game && !store.game.helped && !store.game.tutorial) { store.game.helped = true; save(); }
       const best = ranked && ranked[0];
       const val = {};
       if (ranked) for (const r of ranked) { const k = r.a.i; if (!(k in val) || r.v > val[k]) val[k] = r.v; }
@@ -649,6 +783,7 @@
     vPlay.innerHTML = '<div id="game" style="--land:' + pl.land + 'ms">' +
       '<div class="status"><div class="far">' + farSeats.map(s => seatHTML(v, s, null, pr)).join('') + '</div><div class="tools">' +
       '<button class="icon-btn" id="btn-hint" title="Hint" aria-label="Hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></button>' +
+      (undoShown() ? '<button class="icon-btn" id="btn-undo" title="Undo your last pick" aria-label="Undo"' + (canUndo() ? '' : ' disabled') + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>' : '') +
       '<button class="icon-btn" id="btn-all" title="All cities" aria-label="All cities"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V9l4-3 4 3v12M13 21V12l4-3 3 3v9"/></svg></button>' +
       '<button class="icon-btn" id="btn-log" title="Log" aria-label="Log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>' +
       '<button class="icon-btn" id="btn-menu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div></div>' +
@@ -726,9 +861,14 @@
     const cards = Array.from(f.children);
     const wide = window.innerWidth >= 900;
     const lift = wide ? 22 : 14;
-    const ch = (hand.clientHeight - lift - 6) / 1.03;
     // laptop: as tall as the row allows, but narrow enough that every card still shows its name (about 72% of each card visible)
     const fitW = wide ? (hand.clientWidth - 8) / (1 + 0.72 * Math.max(0, cards.length - 1)) : 1e9;
+    // a wide hand row that the cards can't fill (7 narrow cards) gives its spare height back to the table above it
+    if (wide) {
+      const g = $('#game'), need = Math.ceil(Math.min(200, fitW) / 0.65 * 1.03 + lift + 8);
+      if (g && need < hand.clientHeight - 12) g.style.setProperty('--handh', Math.max(200, need) + 'px');
+    }
+    const ch = (hand.clientHeight - lift - 6) / 1.03;
     const cw = Math.max(40, Math.min(wide ? 200 : 108, ch * 0.65, fitW));
     f.style.setProperty('--card-w', cw.toFixed(1) + 'px');
     // place the cards without motion (a fresh render must not slide in from the left), then lift the picked card
@@ -758,7 +898,12 @@
   function onGameClick(e) {
     const t = e.target;
     const v = table.view();
-    if (t.closest('#btn-hint')) { ui.hint = !ui.hint; if (ui.hint) { const r = rankNow(v); if (r[0] && ui.sel < 0) ui.sel = r[0].a.i; } renderGame(); return; }
+    if (t.closest('#btn-hint')) {
+      ui.hint = !ui.hint;
+      if (ui.hint) { const r = rankNow(v); if (r[0] && ui.sel < 0) ui.sel = r[0].a.i; if (!table.online && store.game && !store.game.helped) { store.game.helped = true; save(); } }
+      renderGame(); return;
+    }
+    if (t.closest('#btn-undo')) { undo(); return; }
     if (t.closest('#btn-all')) { sheet('All cities', '<div style="display:flex;flex-direction:column;gap:6px">' + v.players.map((p, i) => playerRow(v, i)).join('') + '</div>'); return; }
     if (t.closest('#btn-log')) { sheet('Log', logHTML(v)); return; }
     if (t.closest('#btn-menu')) { menuSheet(); return; }
@@ -812,14 +957,27 @@
       renderGame();
       return;
     }
-    try { table.act(a); } catch (err) { ui.fx.land = 0; FX.play('error'); toast(err.message || 'Can’t do that'); }
+    const g = store.game;
+    const before = JSON.stringify(g.state), nDec = Math.max(0, (g.dec || []).length - (a.t === 'side' || a.t === 'discard' ? 0 : 1)), nActs = (g.acts || []).length;
+    let ok = true;
+    try { table.act(a); } catch (err) { ok = false; ui.fx.land = 0; FX.play('error'); toast(err.message || 'Can’t do that'); }
+    if (ok) {
+      if (g.acts) g.acts.push(a);
+      if (undoShown()) { g.undo.push({ state: before, dec: nDec, acts: nActs }); if (g.undo.length > UNDO_MAX) g.undo.shift(); }
+    }
     resetSel();
     const v = table.view();
-    if (v.phase === 'over') { saveLast(v, store.game.dec || []); }
+    if (v.phase === 'over' && !g.finished) {
+      g.finished = true; g.undo = [];
+      recordGame();
+      saveLast(v, g.dec || [], g);
+    }
+    if (window.COACH) COACH.emit('acted');
+    save();
     renderGame();
   }
-  function saveLast(v, dec) {
-    store.last = { view: v, dec, me: ME, when: Date.now() };
+  function saveLast(v, dec, g) {
+    store.last = { view: v, dec, me: ME, when: Date.now(), init: g && g.init ? g.init : null, acts: g && g.acts ? g.acts.slice() : null };
     save();
   }
   function menuSheet() {
@@ -831,7 +989,10 @@
       const b = e.target.closest('[data-m]');
       if (!b) return;
       closeSheet();
-      if (b.dataset.m === 'quit') confirmBox('Quit this game? It can’t be resumed.', 'Quit', () => { table = null; store.game = null; save(); resetSel(); renderPlay(); });
+      if (b.dataset.m === 'quit') {
+        const g = store.game, counts = SP && g && !g.tutorial && (g.acts || []).some(x => x.t !== 'side');
+        confirmBox('Quit this game? It can’t be resumed.' + (counts ? ' It counts as a loss in My stats.' : ''), 'Quit', () => { dropGame(); renderPlay(); });
+      }
       if (b.dataset.m === 'leave') confirmBox('Leave the room? A computer takes your seat.', 'Leave', leaveOnline);
       if (b.dataset.m === 'close') confirmBox('End the room for everyone?', 'End', () => { net.room.close(); leaveOnline(); });
     });
@@ -1091,8 +1252,59 @@
       '<div class="small muted" style="margin-top:6px">Lost by age: ' + byAge.map((x, i) => 'Age ' + AGE[i + 1] + ' <b style="color:var(--text)">' + x.toFixed(1) + '</b>').join(' · ') + '</div></div>' +
       '<div class="panel scroll" style="overflow-x:auto">' + scoreTable(v, me) + '</div></div>' +
       '<div class="panel scroll" style="min-height:0;padding:6px 8px">' + (dec.length ? '<table class="dt"><thead><tr><th>Turn</th><th>You</th><th>Hard</th><th>Lost</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="muted small">No picks recorded for this game.</p>') + '</div>' +
-      '</div></div>';
+      '</div>' + replayHTML(L) + '</div>';
   }
+
+  // ---- Replay: the game is dealt again from its seed and your actions are applied one by one (the computers'
+  // picks come from the same seeded dice, so every turn comes back exactly). One frame per turn that ended.
+  function replayFrames(L) {
+    if (!L.init || !L.acts) return null;
+    if (ui.replay && ui.replay.when === L.when) return ui.replay.frames;
+    let frames = null;
+    try {
+      let st = E.newGame(JSON.parse(JSON.stringify(L.init)));
+      const seen = new Set(), out = [];
+      const grab = () => { const v = E.view(st, L.me || 0); const k = (v.log || []).length; if (k && !seen.has(k)) { seen.add(k); out.push(v); } };
+      grab();
+      for (const a of L.acts) { st = E.apply(st, L.me || 0, a); grab(); }
+      const fin = out[out.length - 1];
+      // the replay must end where the game ended, or it isn't shown
+      if (fin && fin.result && fin.result.scores.every((s, i) => s.total === L.view.result.scores[i].total)) frames = out;
+    } catch (e) { frames = null; }
+    ui.replay = { when: L.when, frames, i: frames ? 0 : -1 };
+    return frames;
+  }
+  function replayHTML(L) {
+    const F = replayFrames(L);
+    if (!F || !F.length) return '';
+    const i = Math.max(0, Math.min(F.length - 1, ui.replay.i)), v = F[i], T = v.log[v.log.length - 1];
+    const me = L.me || 0;
+    const d = (L.dec || []).find(x => x.age === T.age && x.turn === T.turn);
+    const moves = T.moves.slice().sort((a, b) => (a.s === me ? -1 : b.s === me ? 1 : a.s - b.s)).map(m => '<li>' + esc(m.s === me ? 'You' : v.players[m.s].name) + ' ' +
+      (m.t === 'build' ? 'built <b>' + esc(card(v, m.id).name) + '</b>' : m.t === 'wonder' ? 'built wonder stage ' + m.stage : 'sold a card') + '</li>').join('');
+    const word = x => (x.kind === 'sell' ? 'Sell ' : x.kind === 'wonder' ? 'Stage: ' : '') + esc(E.card(v, x.id).name);
+    return '<div class="panel replay" style="gap:6px"><div class="row"><span class="label grow">Replay</span>' +
+      '<button class="btn small" style="min-width:44px" data-rp="-1"' + (i ? '' : ' disabled') + ' aria-label="Previous turn">‹</button>' +
+      '<b class="small" style="min-width:104px;text-align:center">Age ' + AGE[T.age] + ' · turn ' + T.turn + '</b>' +
+      '<button class="btn small" style="min-width:44px" data-rp="1"' + (i < F.length - 1 ? '' : ' disabled') + ' aria-label="Next turn">›</button></div>' +
+      '<input type="range" min="0" max="' + (F.length - 1) + '" value="' + i + '" data-rpr aria-label="Turn" style="width:100%">' +
+      (d && d.lost >= 0.05 ? '<div class="small muted">Hard would have: <b style="color:var(--text)">' + word(d.best) + '</b> (−' + d.lost.toFixed(1) + ')</div>' : '') +
+      '<ul class="log">' + moves + '</ul>' +
+      '<div class="rp-rows">' + v.players.map((p, s) => playerRow(v, s)).join('') + '</div></div>';
+  }
+  vStudy.addEventListener('click', e => {
+    const b = e.target.closest('[data-rp]');
+    if (!b || !ui.replay || !ui.replay.frames) return;
+    ui.replay.i = Math.max(0, Math.min(ui.replay.frames.length - 1, ui.replay.i + Number(b.dataset.rp)));
+    renderStudy();
+  });
+  vStudy.addEventListener('input', e => {
+    if (!e.target.matches('[data-rpr]') || !ui.replay || !ui.replay.frames) return;
+    ui.replay.i = Number(e.target.value);
+    const keep = vStudy.querySelector('.replay');
+    renderStudy();
+    const r = vStudy.querySelector('[data-rpr]'); if (r && keep) r.focus();
+  });
 
   // ================================================================== SETTINGS
   const vSet = $('#v-settings');
@@ -1105,6 +1317,10 @@
       '<div class="panel"><div class="row"><span class="label grow">Wonder sides</span>' + qBtn('The 1st-edition rules deal each wonder with a random side; the 2nd edition lets everyone choose. Rulebook default follows your edition. Side A is easier; side B is trickier.') + '</div>' +
       '<div class="seg sm" data-sides style="margin-top:8px">' + [['default', 'Rulebook'], ['random', 'Random'], ['choose', 'Choose'], ['A', 'All A'], ['B', 'All B']].map(([k, l]) => '<button aria-pressed="' + (s.sides === k) + '" data-v="' + k + '">' + l + '</button>').join('') + '</div></div>' +
       '<div class="panel">' + sw('values', 'Card values', 'Hard’s points estimate on every card') + sw('odds', 'Odds line', 'Hand comes back, next player, copies') + '</div>' +
+      (SC || SP ? '<div class="panel">' +
+        (SP ? '<div class="setrow"><div class="grow"><b>My stats</b><span>Wins per level, rating, awards and the Daily.</span></div><button class="btn small" data-stats>Open</button></div>' : '') +
+        (SC ? '<div class="setrow"><div class="grow"><b>Rules</b><span>How to play, in short sections.</span></div><button class="btn small" data-rules>Open</button></div>' +
+          '<div class="setrow"><div class="grow"><b>Guided game</b><span>One game against two Easy computers with tips on screen.</span></div><button class="btn small" data-tutorial>Start</button></div>' : '') + '</div>' : '') +
       '<div class="panel" id="fx-panel"><div class="row"><span class="label grow">Sound &amp; effects</span></div></div>' +
       '<div class="panel"><div class="setrow"><div class="grow"><b>Online play</b><span>Friends on their own phones, any mix with computers.</span></div><button class="btn small" data-online>Open</button></div></div>' +
       '<div class="panel"><div class="setrow"><div class="grow"><b>Reset</b><span>Clears the saved game, last game, scores and settings.</span></div><button class="btn small" data-reset>Reset</button></div></div>' +
@@ -1117,6 +1333,9 @@
     if (b) { store.settings.ed = Number(b.dataset.v); save(); renderSettings(); if (table && !table.online) toast('Applies to your next game'); return; }
     const sd = e.target.closest('[data-sides] button');
     if (sd) { store.settings.sides = sd.dataset.v; save(); renderSettings(); return; }
+    if (e.target.closest('[data-rules]')) { openRules(); return; }
+    if (e.target.closest('[data-stats]')) { openStats(); return; }
+    if (e.target.closest('[data-tutorial]')) { startTutorial(); return; }
     if (e.target.closest('[data-online]')) { if (!table) ui.online = true; showTab('play', true); if (table && !table.online) toast('Finish or quit the current game first'); return; }
     if (e.target.closest('[data-reset]')) confirmBox('Clear everything saved on this device?', 'Reset', () => {
       try { localStorage.removeItem(KEY); } catch (err) { /* ignore */ }
@@ -1126,6 +1345,23 @@
   vSet.addEventListener('change', e => { const k = e.target.dataset.sw; if (k) { store.settings[k] = e.target.checked; save(); } });
 
   // ------------------------------------------------------------------ boot
+  if (SP) {
+    SP.init(startDaily);
+    window.Profile.onChange(what => {
+      if (what === 'close' && !ui.closingQuiet) modalClosedByHand();
+      if ((what === 'result' || what === 'me' || what === 'reset' || what === 'import') && ui.tab === 'play' && !table && !ui.online) renderPlay();
+    });
+  }
+  if (SC) {
+    const live = () => (table && !table.online && store.game && store.game.tutorial ? { v: table.view(), sel: ui.sel } : null);
+    tour = COACH.tour({ id: SC.ID, steps: SC.steps(live), pauseIf: () => ui.tab !== 'play' || !live() || modalOpen() });
+    new MutationObserver(() => { if ((table || ui.online) && COACH.closeOffer) COACH.closeOffer(); COACH.update(); }).observe(vPlay, { childList: true });
+  }
+  if (window.PWA) window.PWA.safeToReload = () => {
+    if (modalOpen() || (table && table.online) || store.online || ui.online) return false;
+    // a game in progress is saved after every move; reload only between games or away from the table
+    return !table || !!(store.game && store.game.finished) || ui.tab !== 'play';
+  };
   const start = (location.hash || '').slice(1);
   if (['play', 'score', 'odds', 'study', 'settings'].indexOf(start) >= 0) ui.tab = start;
   try { history.replaceState({ tab: ui.tab }, '', '#' + ui.tab); } catch (e) { /* ignore */ }
@@ -1139,5 +1375,7 @@
       renderPlay();
     }).catch(() => { net.connecting = false; renderPlay(); });
   }
-  window.SWApp = { store, get table() { return table; }, act: a => doAct(a), net, version: VERSION, ui };
+  if (SC && store.game && store.game.tutorial && !store.game.finished && table) tour.resume();
+  offerTutorial();
+  window.SWApp = { store, get table() { return table; }, act: a => doAct(a), net, version: VERSION, ui, startGame, startDaily, startTutorial, undo, canUndo, openRules, openStats, recordGame };
 })();
