@@ -160,6 +160,19 @@
       if (!el || !FX.settings.animations || !el.animate) return;
       try { el.animate([{ transform: 'translateX(' + (s.dir * 36) + 'px)' }, { transform: 'none' }], { duration: Math.round(300 * fxSp()), easing: 'ease-out' }); } catch (e) { /* ignore */ }
     },
+    // end of an age: a banner over the table, your battle against each neighbour (+1/+3/+5, −1 or a tie)
+    battle(s) {
+      if (!FX.settings.animations || ui.tab !== 'play' || !$('#game')) return;
+      const old = $('.battle-banner'); if (old) old.remove();
+      const side = (r, arrow) => '<span class="bb-side ' + (r.v > 0 ? 'won' : r.v < 0 ? 'lost' : 'tie') + '">' + (arrow === '◀' ? arrow + ' ' : '') + esc(r.name.replace(/^Computer /, 'C')) +
+        ' <b>' + (r.v > 0 ? '+' + r.v : r.v < 0 ? '−1' : 'tie') + '</b>' + (arrow === '▶' ? ' ' + arrow : '') + '</span>';
+      const el = document.createElement('div');
+      el.className = 'battle-banner'; el.setAttribute('aria-hidden', 'true');
+      el.innerHTML = '<div class="bb-in">' + A.shield() + '<b class="bb-t">Battles · Age ' + AGE[s.age] + '</b><div class="bb-row">' + side(s.L, '◀') + side(s.R, '▶') + '</div></div>';
+      el.style.setProperty('--bb', Math.round(1700 * fxSp()) + 'ms');
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), Math.round(1800 * fxSp()));
+    },
     // end of game: each score row counts up in turn
     scores() {
       const rows = Array.from(document.querySelectorAll('#v-play table.sc tbody tr'));

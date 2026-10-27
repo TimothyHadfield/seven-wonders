@@ -101,6 +101,9 @@
       at(tc, { snd: 'clash' });
       at(tc, { fx: 'pulse', target: 'shield' });
       const mine = w.tokens.filter(x => x.s === me);
+      // the key moment: a banner over the table with your result against each neighbour (app hook 'battle')
+      const res = nb => { const x = mine.find(y => y.vs === nb); return { name: (v.players[nb] || {}).name || '', v: x ? x.v : 0 }; };
+      at(tc, { fx: 'battle', age: wars.length, L: res(L), R: res(R) });
       mine.forEach((x, i) => {
         const tt = tc + 380 + i * 260;
         const side = x.vs === L ? -0.6 : 0.6;

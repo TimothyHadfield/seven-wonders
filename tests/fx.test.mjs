@@ -137,6 +137,19 @@ const names = e => e.sounds.map(s => s.n);
   assert.ok(ci < si, 'the clash comes before the new age');
   ok('age end: clash, your tokens (+N / −1), then "Age II", shuffle and deal');
 
+  // the key moment: one battle banner per age, with your result against each neighbour (0 = a tie)
+  ageEnd.forEach((e, k) => {
+    const b = e.pl.steps.filter(x => x.fx === 'battle');
+    assert.equal(b.length, 1, 'one banner at the end of age ' + (k + 1));
+    assert.equal(b[0].age, k + 1);
+    const W = e.v.wars[k].tokens.filter(t => t.s === 0), L = E.left(e.v, 0), R = E.right(e.v, 0);
+    const want = nb => { const t = W.find(x => x.vs === nb); return t ? t.v : 0; };
+    assert.equal(b[0].L.v, want(L), 'left result'); assert.equal(b[0].R.v, want(R), 'right result');
+    assert.equal(b[0].L.name, e.v.players[L].name);
+  });
+  assert.equal(ev.filter(e => e.pl.steps.some(x => x.fx === 'battle')).length, 3, 'no banner on other turns');
+  ok('age end: a battle banner with the age and your result against each neighbour');
+
   const turnChimes = ev.filter(e => names(e).includes('turn'));
   assert.equal(turnChimes.length, 0, 'local play: no "your turn" chime every turn');
   ok('no your-turn chime in local play (the hand whoosh says it)');

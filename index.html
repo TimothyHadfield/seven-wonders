@@ -639,6 +639,21 @@
   body.fx-fast .deal, body.fx-fast .popin, body.fx-fast .mc.new, body.fx-fast .mcn.new, body.fx-fast .tbl-fan > .card.fanin { animation-duration: .17s; }
   body.fx-noanim .deal, body.fx-noanim .popin, body.fx-noanim .mc.new, body.fx-noanim .mcn.new, body.fx-noanim .tbl-fan > .card.fanin, body.fx-noanim .sheet, body.fx-noanim .sheet-back, body.fx-noanim .toast { animation: none; }
   body.fx-noanim .card, body.fx-noanim .tbl-card { transition: none; }
+  /* age-end battles: one banner over the table (fxHooks.battle) */
+  .battle-banner { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 60; }
+  .battle-banner .bb-in { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 22px 14px; border-radius: 16px;
+    background: radial-gradient(120% 140% at 50% 0%, #3a2a1a, #1b140d); border: 2px solid #b98a4e; box-shadow: 0 18px 50px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.12);
+    animation: bbIn var(--bb, 1700ms) cubic-bezier(.2,.8,.2,1) both; max-width: calc(100vw - 32px); }
+  .battle-banner .bb-in > svg { width: 44px; height: 44px; filter: drop-shadow(0 3px 6px rgba(0,0,0,.5)); }
+  .battle-banner .bb-t { font: 800 20px/1.1 Georgia, "Times New Roman", serif; color: #f6e6c4; letter-spacing: .02em; }
+  .battle-banner .bb-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .battle-banner .bb-side { padding: 5px 10px; border-radius: 999px; font-size: 14px; color: var(--text); background: rgba(255,255,255,.08); white-space: nowrap; }
+  .battle-banner .bb-side b { font-size: 16px; }
+  .battle-banner .won b { color: var(--good); } .battle-banner .lost b { color: var(--bad); } .battle-banner .tie b { color: var(--muted); }
+  @keyframes bbIn { 0% { transform: scale(.55) translateY(20px); opacity: 0; } 14% { transform: scale(1.06); opacity: 1; } 22% { transform: none; } 80% { transform: none; opacity: 1; } 100% { transform: translateY(-14px) scale(.96); opacity: 0; } }
+  @media (min-width: 900px) { .battle-banner .bb-in { padding: 22px 34px 18px; } .battle-banner .bb-in > svg { width: 60px; height: 60px; } .battle-banner .bb-t { font-size: 28px; } .battle-banner .bb-side { font-size: 17px; } .battle-banner .bb-side b { font-size: 20px; } }
+  body.fx-noanim .battle-banner { display: none; }
+  @media (prefers-reduced-motion: reduce) { .battle-banner .bb-in { animation-name: bbFade; } @keyframes bbFade { 0%, 100% { opacity: 0; } 10%, 85% { opacity: 1; } } }
   #fx-panel .fx-set { margin-top: 4px; }
   #fx-panel .fx-row { border-top: 0; padding: 0; min-height: 46px; gap: 10px; }
   #fx-panel .fx-lab { font-weight: 650; }
@@ -681,12 +696,12 @@
 <script src="js/art.js?v=4"></script>
 <script src="js/fx.js?v=4"></script>
 <script src="js/table.js?v=1"></script>
-<script src="js/sfx.js?v=1"></script>
+<script src="js/sfx.js?v=2"></script>
 <script src="js/profile.js?v=1"></script>
 <script src="js/swprofile.js?v=1"></script>
 <script src="js/coach.js?v=1"></script>
 <script src="js/swcoach.js?v=1"></script>
-<script src="js/pwa.js?v=8" data-version="8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/pwa.js?v=9" data-version="9"></script>
+<script src="js/app.js?v=9"></script>
 </body>
 </html>
