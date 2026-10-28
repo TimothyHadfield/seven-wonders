@@ -24,3 +24,10 @@
 - **Decided:** Hard keeps no noise (measured cost); ratings Easy 1200 / Medium 1480 / Hard 1750 from the ladder; My stats/Daily/Rules as one button row (hero too tight at 320).
 - **Verified:** engine 29, online 4, fx 14, study 5, pwa-check 18/18 (3/18 old), vis 246/246, edge 124/124, ui 27/27 (WebKit 393/320/landscape/1280/1440); one read-only reviewer: fixed mid-word name cuts, "Vorkshop", small replay arrows.
 - **Open:** real-phone install/offline; Tim's calls on remaining laptop bare wood at 5p Age I and phone city names.
+
+## 2026-10-28 — wave 3 (builder from the manager)
+- **Asked:** "Just make the games better" — videos, variants/expansions, practical settings, iPhone layout. Brief: Videos in Rules; Leaders module (off by default, exact list from 2 sources, original art, computers at all levels, online/Undo/save/replay/Score correct, ladder must hold); wonder setup options; laptop 5p bare wood + far seats; remember last setup.
+- **Built:** js/leaders.js (36 leaders) + engine draft/recruit/effects + bot drafting/recruiting; Leaders UI (draft, Recruit/Stage/Sell, white leader column, portraits, Score row, log/replay words); Settings: Leaders switch + Your wonder select; Rules: Leaders + Videos sections; laptop dashed "Your city" note, far seats show wonder names. Remember-last-setup already existed (players, level, edition, sides saved).
+- **Decided:** Plato costs 4 (2 of 4 lists + 2nd ed.; 2 lists say 3). Daily and guided game ignore Leaders / Your wonder. Leader moves aren't Study-recorded.
+- **Verified:** leaders.test 34/34 (0/34 old), engine 29, study 5, online, fx 14; base fingerprint unchanged; ladder with leaders Hard>Medium>Easy (67/61, 80/77, 96/94%); replay 20/20 identical; WebKit click-through draft→recruit→Age I at 393, 320, 659×393, 1280, 1440 (no errors, no overflow); ui 27, vis 246, pwa 18/18.
+- **Open:** Rome + Leaders guilds; Score calculator leaders row; two-browser online with leaders; edge-check crashes WebKit mid-run (main too).

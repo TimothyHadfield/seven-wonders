@@ -99,8 +99,29 @@ Every 2nd-ed card matches I; 2nd-ed wonders match I and T.
 |---|---|
 | 1st edition (default) / 2nd edition | both playable, Settings → Edition |
 | Wonder sides: rulebook default / random / choose / all A / all B | Settings → Wonder sides |
+| Your wonder (pick one, the others random) | Settings → Your wonder (Daily and guided game ignore it) |
+| Leaders expansion (1st-edition rules) | Settings → Leaders expansion, off by default; see "Leaders" below |
 | 2-player Free City (RB) | **not built** (the site plays 3–7) |
 | 7 Wonders Duel | **not built**: a different game (pyramid card layout, science and military victories); left for later |
+
+## Leaders (2026-10-28)
+
+Rules: the official 1st-edition Leaders rulebook PDF (Repos Production), rules + FAQ read page by page.
+6 starting coins; 4 leaders each; draft = keep one, pass the rest to the RIGHT (receive from your left), three
+times, the last card handed to you is the 4th; at the start of each age everyone plays one kept leader at once
+(recruit: its coins to the bank / build the next wonder stage with it: pay the stage / sell: 3 coins, back to the box);
+before Age III the leftover kept leader goes back to the box. FAQ points kept: Halikarnassos chooses before Solomon;
+Tomyris has no effect on battles before she was recruited; Nero, Xenophon, Vitruvius count only from then on;
+Hatshepsut gives 1 coin per neighbour per turn you buy from them.
+
+Costs: 4 independent card lists — karlaugustnybo (leaders.rs), godaup (leaders.json), mattiacci 7wjs (misc.js),
+boarder-portal (leaders.ts). They agree on all 36 costs except **Plato: 3 (karl, godaup) vs 4 (mattiacci,
+boarder, and the 2nd edition)** → 4 chosen. Effect wording on the cards is our own (js/leaders.js).
+
+Not built: the Rome wonder and the 4 Leaders guilds (Gamers', Courtesan's, Diplomat's, Architect's); the
+Leaders 2nd-edition rules. The Daily and the guided game always use the base game.
+Tests: `node tests/leaders.test.js` (34; all fail on the build before the module). The base game is proved
+unchanged by `node tools/fingerprint.js` (210 computer games hashed: `f42aa43d…` before and after).
 
 ## What the tests prove
 
