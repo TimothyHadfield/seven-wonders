@@ -71,6 +71,7 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - Common brief: exact rules and card counts, original art only, $0, phone-first with a real laptop layout, no page scroll on main screens, bottom tabs on phone, "?" explains why, choices in Settings, odds at the point of decision, measured computers behind "How strong?".
 
 ## Traps
+- **Kits 2026-10-28 (sweep):** game-coach 1.2.0 (offer `place:'auto', avoid:['[data-start]']`; index.html sets `--coach-offer-top: 4px` on short landscape so the top spot clears Deal at 659×393) + game-pwa 1.4.0 (data-version 13).
 - **Kits re-copied 2026-10-27 (kitfix):** game-coach 1.1.0 (rules tabs wrap; a note beside a tall target keeps title + 2 lines + buttons) and game-pwa 1.3.0 (`data-extra`). Copies stay byte-identical to `../_coach` / `../_pwa`.
 - `js/online.js` is a COPY of `../_online/online.js`. Never edit it here. **Cache stamp (2026-10-27):** `js/app.js` imports `js/online.js?v=a3d0418b`, the `_online` content stamp. After a re-copy: put the new stamp from `node ../_online/tools/stamp.mjs` there, bump app.js's `?v=` (and pwa.js `data-version`), then `node ../_online/tools/stamp.mjs --check .` must say OK.
 - After changing `js/bots.js`: rerun measure-levels and update `STRENGTH_NOTE` in `js/app.js`; rerun draft-stats.
