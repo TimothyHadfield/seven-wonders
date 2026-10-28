@@ -461,7 +461,7 @@
     if (!SC || !tour || table || ui.online || ui.tab !== 'play' || COACH.offered(SC.ID)) return;
     setTimeout(() => {
       if (table || ui.online || ui.tab !== 'play' || modalOpen()) return;
-      COACH.offer({ id: SC.ID, title: 'New to 7 Wonders?', text: 'Play one guided game against two Easy computers. Each age\'s scoring is explained as it happens.', yes: 'Teach me', no: 'No thanks', onYes: startTutorial });
+      COACH.offer({ id: SC.ID, title: 'New to 7 Wonders?', text: 'Play one guided game against two Easy computers. Each age\'s scoring is explained as it happens.', yes: 'Teach me', no: 'No thanks', onYes: startTutorial, place: 'auto', avoid: ['[data-start]'] });
     }, 600);
   }
   vPlay.addEventListener('click', e => {

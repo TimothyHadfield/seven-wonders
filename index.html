@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="css/table.css?v=1">
 <link rel="stylesheet" href="css/profile.css?v=1">
-<link rel="stylesheet" href="css/coach.css?v=2">
+<link rel="stylesheet" href="css/coach.css?v=3">
 <style>
   :root {
     --bg: #0f1117; --bg-soft: #161923; --card: #1a1e2b; --line: #2a3042;
@@ -132,7 +132,9 @@
   .card .ch, .card .fr { font-size: 10.5px; padding: 2px 6px; color: #444; }
   .card.brown { --frame: #8a5a32; --paper: #ecdcc4; } .card.grey { --frame: #7d8292; --paper: #e5e6ea; } .card.blue { --frame: #2f6bbd; --paper: #dce7f6; }
   .card.yellow { --frame: #d3a12a; --paper: #f6ebcc; } .card.red { --frame: #c2433a; --paper: #f4dcd6; } .card.green { --frame: #2f8a50; --paper: #dbeedf; } .card.purple { --frame: #7b4cab; --paper: #e8ddf3; }
-  .coach-rules-body .vids a { color: #2a4f9e; font-weight: 650; }
+  .coach-rules-body .vids a { font-weight: 650; }
+  /* sideways phone: the first-visit card sits 4px from the top so it clears Deal */
+  @media (orientation: landscape) and (max-height: 500px) { :root { --coach-offer-top: 4px; } }
   .card.white { --frame: #8f7c58; --paper: #f3eee2; } .card .top .tag { color: #fff; background: rgba(255,255,255,.22); font-size: calc(var(--cw) * .085); }
   .card.sel { outline-color: var(--accent-warm); box-shadow: inset 0 0 0 calc(var(--cw) * .035) var(--frame), inset 0 0 0 calc(var(--cw) * .05) rgba(255,255,255,.55), 0 4px 6px rgba(0,0,0,.35), 0 14px 24px rgba(0,0,0,.45), 0 0 14px rgba(240,179,84,.5); }
   .card.dim { filter: saturate(.35) brightness(.7); }
@@ -710,9 +712,9 @@
 <script src="js/sfx.js?v=2"></script>
 <script src="js/profile.js?v=1"></script>
 <script src="js/swprofile.js?v=1"></script>
-<script src="js/coach.js?v=2"></script>
+<script src="js/coach.js?v=3"></script>
 <script src="js/swcoach.js?v=3"></script>
-<script src="js/pwa.js?v=12" data-version="12"></script>
-<script src="js/app.js?v=12"></script>
+<script src="js/pwa.js?v=13" data-version="13"></script>
+<script src="js/app.js?v=13"></script>
 </body>
 </html>
