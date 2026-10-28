@@ -132,6 +132,8 @@
   .card .ch, .card .fr { font-size: 10.5px; padding: 2px 6px; color: #444; }
   .card.brown { --frame: #8a5a32; --paper: #ecdcc4; } .card.grey { --frame: #7d8292; --paper: #e5e6ea; } .card.blue { --frame: #2f6bbd; --paper: #dce7f6; }
   .card.yellow { --frame: #d3a12a; --paper: #f6ebcc; } .card.red { --frame: #c2433a; --paper: #f4dcd6; } .card.green { --frame: #2f8a50; --paper: #dbeedf; } .card.purple { --frame: #7b4cab; --paper: #e8ddf3; }
+  .coach-rules-body .vids a { color: #2a4f9e; font-weight: 650; }
+  .card.white { --frame: #8f7c58; --paper: #f3eee2; } .card .top .tag { color: #fff; background: rgba(255,255,255,.22); font-size: calc(var(--cw) * .085); }
   .card.sel { outline-color: var(--accent-warm); box-shadow: inset 0 0 0 calc(var(--cw) * .035) var(--frame), inset 0 0 0 calc(var(--cw) * .05) rgba(255,255,255,.55), 0 4px 6px rgba(0,0,0,.35), 0 14px 24px rgba(0,0,0,.45), 0 0 14px rgba(240,179,84,.5); }
   .card.dim { filter: saturate(.35) brightness(.7); }
   .card.dim.sel { filter: saturate(.6) brightness(.9); }
@@ -212,6 +214,7 @@
   .mc .top .cchip { width: 4px; height: 7px; }
   .mc.brown { --frame: #8a5a32; --paper: #ecdcc4; } .mc.grey { --frame: #7d8292; --paper: #e5e6ea; } .mc.blue { --frame: #2f6bbd; --paper: #dce7f6; }
   .mc.yellow { --frame: #d3a12a; --paper: #f6ebcc; } .mc.red { --frame: #c2433a; --paper: #f4dcd6; } .mc.green { --frame: #2f8a50; --paper: #dbeedf; } .mc.purple { --frame: #7b4cab; --paper: #e8ddf3; }
+  .mc.white { --frame: #8f7c58; --paper: #f3eee2; } .mc .top .tag { color: #fff; background: none; font-size: 7px; padding: 0 1px; }
   .mc .mn, .mc .mp { display: none; }
   /* card paper grain + a little light on each picture (original art, see js/art.js pic()) */
   .card { background-image: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0) 40%, rgba(0,0,0,.06)), repeating-linear-gradient(35deg, rgba(90,60,20,.035) 0 1px, transparent 1px 3px); }
@@ -306,6 +309,13 @@
   /* your seat: cards stacked above your board, coins and tokens beside it */
   .me { grid-area: me; display: flex; flex-direction: column; gap: 4px; min-width: 0; cursor: pointer; }
   .mytop { display: flex; gap: 6px; align-items: flex-end; min-width: 0; }
+  .cempty, .far .seat .fw { display: none; }
+  select[data-wonder] { -webkit-appearance: none; appearance: none; min-height: 40px; padding: 0 28px 0 10px; font-weight: 650;
+    background: var(--bg-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%239aa3b5'/%3E%3C/svg%3E") no-repeat right 10px center / 10px 6px; }
+  @media (min-width: 900px) {
+    .me .cempty { display: flex; align-items: center; justify-content: center; flex: 1; align-self: stretch; color: rgba(255,240,215,.42); font-size: 14px; border: 1.5px dashed rgba(255,240,215,.2); border-radius: 12px; }
+    .far .seat .fw { display: inline; }
+  }
   .me .citycards { --colh: 46px; --mw: 40px; --mh: 30px; --bh: 13px; flex: 1; }
   .mine-tok { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
   .mine-tok .tok { font-size: 14px; }
@@ -689,19 +699,20 @@
   <section class="view" id="v-settings"></section>
 </div>
 <script src="js/cards.js?v=1"></script>
-<script src="js/engine.js?v=1"></script>
-<script src="js/bots.js?v=2"></script>
-<script src="js/online-game.js?v=1"></script>
+<script src="js/leaders.js?v=1"></script>
+<script src="js/engine.js?v=2"></script>
+<script src="js/bots.js?v=3"></script>
+<script src="js/online-game.js?v=2"></script>
 <script src="js/draft-data.js?v=1"></script>
-<script src="js/art.js?v=5"></script>
+<script src="js/art.js?v=6"></script>
 <script src="js/fx.js?v=4"></script>
 <script src="js/table.js?v=1"></script>
 <script src="js/sfx.js?v=2"></script>
 <script src="js/profile.js?v=1"></script>
 <script src="js/swprofile.js?v=1"></script>
 <script src="js/coach.js?v=2"></script>
-<script src="js/swcoach.js?v=2"></script>
-<script src="js/pwa.js?v=11" data-version="11"></script>
-<script src="js/app.js?v=11"></script>
+<script src="js/swcoach.js?v=3"></script>
+<script src="js/pwa.js?v=12" data-version="12"></script>
+<script src="js/app.js?v=12"></script>
 </body>
 </html>

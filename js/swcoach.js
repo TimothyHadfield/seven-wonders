@@ -39,6 +39,21 @@
         '<ul><li>Military tokens (can be negative)</li><li>Coins: 1 point per 3</li><li>Wonder stages</li><li>Blue buildings</li><li>Science</li>' +
         '<li>Yellow buildings from Age III (some score for cards you own)</li><li>Purple guilds (score for what you and your neighbours built)</li></ul>' +
         '<p>Guilds come only in Age III: as many as there are players plus two.</p>' },
+      { id: 'leaders', title: 'Leaders expansion (optional)', short: 'Leaders', html:
+        '<p>Off by default; switch it on in Settings. Everyone starts with <b>6 coins</b> instead of 3.</p>' +
+        '<p><b>Draft</b>: before Age I you get 4 leaders. Keep one and pass the rest to the right, three times; the last one handed to you is your fourth.</p>' +
+        '<p><b>Each age</b> starts with everyone playing one kept leader at the same time: <b>recruit</b> it (pay its coins to the bank), use it to build your next <b>wonder stage</b> (pay the stage cost), or <b>sell</b> it for 3 coins.</p>' +
+        '<p>You play three of your four leaders; the last one goes back to the box before Age III. Tap a city to read its leaders.</p>' +
+        '<p class="tip">Cheap leaders that fit your plan early (a colour you collect, a science symbol) usually beat expensive ones you can\'t afford until Age III.</p>' },
+      { id: 'videos', title: 'Videos', short: 'Videos', html:
+        '<p>Free videos on YouTube (they open in a new tab).</p>' +
+        '<ul class="vids">' +
+        '<li><a href="https://www.youtube.com/watch?v=XnBLz61FJYw" target="_blank" rel="noopener">Learn to play in 10 minutes</a> · Repos Production (the publisher)</li>' +
+        '<li><a href="https://www.youtube.com/watch?v=z_Wfdn5Es8U" target="_blank" rel="noopener">How to play (1st edition)</a> · Watch It Played</li>' +
+        '<li><a href="https://www.youtube.com/watch?v=QVLUu7qkLWI" target="_blank" rel="noopener">How to play (2nd edition)</a> · Watch It Played</li>' +
+        '<li><a href="https://www.youtube.com/watch?v=mQiPOeFLcXw" target="_blank" rel="noopener">12 basic strategy tips</a> · Wonderful Plays</li>' +
+        '<li><a href="https://www.youtube.com/watch?v=f6QrBlHfGSQ" target="_blank" rel="noopener">How to play the Leaders expansion</a> · Prague Golf &amp; Games</li>' +
+        '</ul>' },
       { id: 'site', title: 'This site', short: 'Site', html:
         '<ul><li><b>Odds line</b>: whether this hand comes back to you, whether the next player can build the card, how many copies are in the age.</li>' +
         '<li><b>Hint</b> (bulb): what Hard would pick. <b>Undo</b>: take back your last pick. A game with either counts as "with help" in My stats.</li>' +

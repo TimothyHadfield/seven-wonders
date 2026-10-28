@@ -30,7 +30,7 @@
   const WILD = '<circle cx="10" cy="10" r="8" fill="#2e7d4f"/><path d="M10 4.2l1.6 3.6 3.9.4-2.9 2.6.8 3.8L10 12.6l-3.4 2 .8-3.8-2.9-2.6 3.9-.4z" fill="#e3f2e6"/>';
   const wild = () => svg(WILD);
   const laurel = n => '<span class="vp">' + n + '</span>';
-  const COLOR_HEX = { brown: '#8a5a32', grey: '#8d93a3', blue: '#3f7fd0', yellow: '#e2b33c', red: '#cf4b41', green: '#3d9a5d', purple: '#8a58b8' };
+  const COLOR_HEX = { brown: '#8a5a32', grey: '#8d93a3', blue: '#3f7fd0', yellow: '#e2b33c', red: '#cf4b41', green: '#3d9a5d', purple: '#8a58b8', white: '#8f7c58' };
   const chip = color => '<i class="cchip" style="background:' + COLOR_HEX[color] + '"></i>';
   const arrows = who => '<span class="who">' + (who.indexOf('N') >= 0 ? '◀' : '') + (who.indexOf('S') >= 0 ? '●' : '') + (who.indexOf('N') >= 0 ? '▶' : '') + '</span>';
   const STAGE_IC = '<path d="M3 16h14M4.5 16V9.5L10 5l5.5 4.5V16" fill="none" stroke="#c9a54a" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 16v-4h4v4" fill="#c9a54a"/>';
@@ -68,6 +68,9 @@
       out.push('<span class="per">' + (p.coin ? coin(p.coin) : '') + (p.vp ? laurel(p.vp) : '') + '<b>/</b>' + what + arrows(p.who) + '</span>');
     }
     if (e.deco) out.push('<span class="per">' + laurel(e.deco) + '<b>if</b>' + stageIc() + '</span>');
+    // leaders: a colour set (Justinian, Plato) and a short label for rule-changing effects
+    if (e.sets) out.push('<span class="per">' + laurel(e.setvp) + '<b>/</b>' + (e.sets.length > 3 ? '<span class="tag">7 colours</span>' : e.sets.map(chip).join('')) + '</span>');
+    if (e.tag) out.push('<span class="tag">' + e.tag + '</span>');
     return out.join('');
   }
   function stageEffect(s) {
@@ -174,7 +177,49 @@
     Vineyard: 'grapes', Haven: 'ship', Lighthouse: 'lighthouse', 'Chamber of Commerce': 'scales', Arena: 'arena', Ludus: 'helmet' };
   const RES_MOTIF = { W: 'trees', S: 'stone', C: 'clay', O: 'ore', G: 'glass', L: 'loom', P: 'press' };
   const GUILD_SYM = { brown: 'stone', grey: 'loom', blue: 'temple', green: 'compass', red: 'swords', yellow: 'scales', stage: 'temple', defeat: 'swords' };
+  // ---------------------------------------------------------------- leader portraits (original): a bust in a robe
+  // look = [skin, robe, headwear, beard]; drawn in the same 40x30 box as the card scenes
+  const HAIR = '#3b2a1e', GOLD = '#d8b24a', GOLDD = '#9a7a26';
+  const HEAD = {
+    curls: () => '<path d="M14 11c0-5 2.6-7.6 6-7.6s6 2.6 6 7.6c0 3.4-1 6.6-1.6 8.6h-2V11c-1-1.6-2.4-2.2-2.4-2.2s-1.4.6-2.4 2.2v8.6h-2c-.6-2-1.6-5.2-1.6-8.6z" fill="' + HAIR + '"/>',
+    curlsM: () => '<path d="M14.6 10.5c-.4-4 2-6.6 5.4-6.6s5.8 2.6 5.4 6.6c-.6-1.4-1.4-2.2-2.4-2.4-1 .8-2 1-3 1s-2-.2-3-1c-1 .2-1.8 1-2.4 2.4z" fill="' + HAIR + '"/>' +
+      [[16, 5.6], [18.6, 4.4], [21.4, 4.4], [24, 5.6], [15, 8], [25, 8]].map(p => '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="1.5" fill="' + HAIR + '"/>').join(''),
+    short: () => '<path d="M14.8 10c0-4 2.3-5.8 5.2-5.8s5.2 1.8 5.2 5.8c-1-2-3-2.6-5.2-2.6S15.8 8 14.8 10z" fill="' + HAIR + '"/>',
+    bald: () => '<path d="M14.6 12c-.2-2 .2-3 .8-3.6M25.4 12c.2-2-.2-3-.8-3.6" stroke="#b9b2a4" stroke-width="1.4" stroke-linecap="round" fill="none"/>',
+    laurel: () => HEAD.short() + '<path d="M14.6 9.4c2-3.4 8.8-3.4 10.8 0" stroke="#3d8a4a" stroke-width="1.1" fill="none"/>' +
+      [[15.4, 8], [17.2, 6.6], [19.2, 6], [21, 6], [22.9, 6.6], [24.6, 8]].map(p => '<ellipse cx="' + p[0] + '" cy="' + p[1] + '" rx="1.1" ry=".6" fill="#5aa35f"/>').join(''),
+    diadem: () => HEAD.curls() + '<path d="M15 8.4c2.6-1.6 7.4-1.6 10 0" stroke="' + GOLD + '" stroke-width="1.3" fill="none"/><circle cx="20" cy="7.3" r="1" fill="#cf4b41"/>',
+    tallcrown: () => '<path d="M15 9l-.8-7.2h11.6L25 9z" fill="#2f5f9f"/><path d="M15 9l-.2-1.6h10.4L25 9z" fill="' + GOLD + '"/><path d="M14.4 3.6h11.2" stroke="' + GOLD + '" stroke-width=".7"/>',
+    nemes: () => '<path d="M14 13c0-6.4 2.6-9.4 6-9.4s6 3 6 9.4l2.4 7H24.6l-.8-5.6h-7.6l-.8 5.6h-3.8z" fill="' + GOLD + '"/>' +
+      '<path d="M14.6 9h10.8M14.2 11.6h11.6M13.2 15h2.6M24.2 15h2.6M12.6 17.6h2.6M24.8 17.6h2.6" stroke="#2f5f9f" stroke-width=".9"/>',
+    nemesF: () => HEAD.nemes() + '<circle cx="20" cy="5" r=".9" fill="#cf4b41"/>',
+    helmet: () => '<path d="M14.4 11.6c0-5.2 2.5-7.8 5.6-7.8s5.6 2.6 5.6 7.8v3.6h-1.9v-3.4c-1.1-.6-2.4-.8-3.7-.8s-2.6.2-3.7.8v3.4h-1.9z" fill="#b08a3a"/>' +
+      '<path d="M15 4.4c2.6-3.6 7.4-3.6 10 0" stroke="#cf4b41" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+    cap: () => '<path d="M14.8 9c0-3.4 2.3-5.2 5.2-5.2s5.2 1.8 5.2 5.2z" fill="#7f6a9c"/><path d="M14.4 9h11.2" stroke="#5c4a78" stroke-width="1"/>',
+    crown: () => HEAD.short() + '<path d="M15 8.4l.6-4.2 2.1 2.2 2.3-3.2 2.3 3.2 2.1-2.2.6 4.2z" fill="' + GOLD + '" stroke="' + GOLDD + '" stroke-width=".5"/>',
+    veil: (r) => '<path d="M13.4 14c0-7 3-10.2 6.6-10.2s6.6 3.2 6.6 10.2l1.6 8h-3.2l-1-7.2c-1 .5-2.1.7-4 .7s-3-.2-4-.7l-1 7.2h-3.2z" fill="' + r + '"/><path d="M13.4 14c0-7 3-10.2 6.6-10.2v2c-2.4 0-4.4 2.6-4.6 8z" fill="#fff" opacity=".25"/>',
+    hood: (r) => HEAD.veil(r) + '<path d="M15 8c2.8-1.8 7.2-1.8 10 0" stroke="#000" stroke-width=".6" opacity=".25" fill="none"/>',
+    bun: () => '<circle cx="20" cy="3.6" r="2.4" fill="' + HAIR + '"/>' + HEAD.short(),
+    tallcap: () => '<path d="M15.4 8.6V2.6h9.2v6z" fill="#e6dcc0"/><path d="M15.4 4.6h9.2M15.4 6.6h9.2" stroke="' + GOLDD + '" stroke-width=".6"/><path d="M15 8.6h10" stroke="' + GOLDD + '" stroke-width="1.1"/>',
+    fur: () => HEAD.curls() + '<path d="M14 8.6c0-3.2 2.6-4.8 6-4.8s6 1.6 6 4.8c0 .8-.4 1.2-1 1.2H15c-.6 0-1-.4-1-1.2z" fill="#8a6a4a"/><path d="M15.6 6.4l.6 1.4M18 5.4l.4 1.6M20.4 5l.2 1.6M22.8 5.4l-.2 1.6M24.8 6.4l-.6 1.4" stroke="#5a412a" stroke-width=".6"/>',
+  };
+  function portrait(look) {
+    const skin = look[0], robe = look[1], hw = look[2], beard = look[3];
+    const long = { curls: 1, diadem: 1, fur: 1 }[hw];
+    const back = long ? '<path d="M14 11c0-5 2.6-7.6 6-7.6s6 2.6 6 7.6c0 4-1 7-1.6 9h-8.8c-.6-2-1.6-5-1.6-9z" fill="' + HAIR + '"/>' : '';
+    const body = '<path d="M7.5 30.2c0-6.6 5-9.6 12.5-9.6s12.5 3 12.5 9.6z" fill="' + robe + '"/><path d="M20 20.6c7.5 0 12.5 3 12.5 9.6H20z" fill="#000" opacity=".16"/>' +
+      '<path d="M17 21c1 2.4 5 2.4 6 0" stroke="#fff" stroke-width=".9" opacity=".45" fill="none"/>';
+    const neck = '<path d="M17.8 14.5h4.4v7c-1.4 1-3 1-4.4 0z" fill="' + skin + '"/><path d="M20 14.5h2.2v7c-.7.5-1.4.7-2.2.8z" fill="#000" opacity=".12"/>';
+    const head = '<ellipse cx="20" cy="11" rx="5" ry="6" fill="' + skin + '"/><path d="M20 5a5 6 0 0 1 0 12z" fill="#000" opacity=".1"/>' +
+      '<circle cx="18.2" cy="10.6" r=".55" fill="#2b1d12"/><circle cx="21.8" cy="10.6" r=".55" fill="#2b1d12"/>' +
+      '<path d="M20 11.2l-.5 2h1" stroke="#000" stroke-width=".4" opacity=".35" fill="none"/>' +
+      (beard ? '' : '<path d="M18.8 14.6c.8.5 1.6.5 2.4 0" stroke="#8a3a2a" stroke-width=".6" stroke-linecap="round" fill="none"/>');
+    const bd = beard ? '<path d="M15.2 12.4c0 5 2.4 7.2 4.8 7.2s4.8-2.2 4.8-7.2c-1.4 1.8-3 2.4-4.8 2.4s-3.4-.6-4.8-2.4z" fill="' + (hw === 'bald' ? '#b9b2a4' : HAIR) + '"/>' : '';
+    const top = (HEAD[hw] || HEAD.short)(robe);
+    return '<ellipse cx="20" cy="29" rx="15" ry="1.6" fill="#000" opacity=".12"/>' + back + body + neck + head + bd + top;
+  }
   function pic(c) {
+    if (c.leader) return portrait(c.look || ['#d9a77c', '#8f7c58', 'short', 0]);
     const ink = INK[c.color] || INK.brown, d = ink[0], l = ink[1];
     const ground = '<ellipse cx="20" cy="28.5" rx="17" ry="1.8" fill="#000" opacity=".12"/>';
     const by = BY_NAME[c.name];
@@ -234,5 +279,5 @@
   // the site icon (also used in the header)
   const ICON = '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="#1a1e2b"/><path d="M12 50l20-34 20 34z" fill="#f0b354"/><path d="M32 16l20 34H38z" fill="#c98f36"/><circle cx="47" cy="15" r="5" fill="#6ea8fe"/><path d="M8 52h48" stroke="#6ea8fe" stroke-width="3" stroke-linecap="round"/></svg>';
 
-  root.SWArt = { res, coin, shield, sci, wild, laurel, chip, cost, resCost, effect, stageEffect, face, mini, back, emblem, pic, stageIc, COLOR_HEX, ICON, svg, DEFEAT };
+  root.SWArt = { res, coin, shield, sci, wild, laurel, chip, cost, resCost, effect, stageEffect, face, mini, back, emblem, pic, portrait, stageIc, COLOR_HEX, ICON, svg, DEFEAT };
 })(typeof self !== 'undefined' ? self : this);

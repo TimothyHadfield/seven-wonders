@@ -3,7 +3,7 @@
    object is the seat transport (local state on this device, or an online room through js/online.js). */
 (function () {
   'use strict';
-  const VERSION = '1.0 · 2026-10-20';
+  const VERSION = '1.1 · 2026-10-28';
   const E = SWEngine, Cd = SWCards, A = SWArt, Bt = SWBots, OG = SWOnlineGame;
   const KEY = 'sevenwonders:v1';
   let ME = 0;
@@ -18,7 +18,7 @@
 
   // ------------------------------------------------------------------ storage
   function fresh() {
-    return { v: 1, settings: { ed: 1, sides: 'default', level: 'medium', n: 4, values: false, odds: true, name: '' },
+    return { v: 1, settings: { ed: 1, sides: 'default', level: 'medium', n: 4, values: false, odds: true, name: '', leaders: false, wonder: '' },
       game: null, last: null, online: false, score: null };
   }
   // raw: the saved JSON string; each section is checked, a bad one reset
@@ -47,7 +47,8 @@
         if (!['default', 'random', 'choose', 'A', 'B'].includes(st.sides)) st.sides = def.sides;
         if (!['easy', 'medium', 'hard'].includes(st.level)) st.level = def.level;
         if (!(st.n >= 3 && st.n <= 7)) st.n = def.n;
-        st.values = !!st.values; st.odds = st.odds !== false;
+        st.values = !!st.values; st.odds = st.odds !== false; st.leaders = !!st.leaders;
+        if (Cd.WONDER_IDS.indexOf(st.wonder) < 0) st.wonder = '';
         if (typeof st.name !== 'string') st.name = '';
         return out;
       }
@@ -320,7 +321,8 @@
       '<button class="btn" data-on="open" style="width:100%">Play online</button>' +
       (SP || SC ? '<div class="row">' + (SP ? '<button class="btn small grow" data-daily>' + (dailyDone() ? 'Daily ✓' : 'Daily') + '</button>' : '') +
         (SC ? '<button class="btn small grow" data-rules>Rules</button>' : '') + (SP ? '<button class="btn small grow" data-stats>My stats</button>' : '') + '</div>' : '') +
-      '<p class="muted small" style="margin:0">' + (s.ed === 1 ? '1st' : '2nd') + ' edition · sides ' + esc(sidesWord()) + ' · change in Settings</p>' +
+      '<p class="muted small" style="margin:0">' + (s.ed === 1 ? '1st' : '2nd') + ' edition · sides ' + esc(sidesWord()) + (s.leaders ? ' · Leaders' : '') +
+        (s.wonder ? ' · you play ' + esc(Cd.EDITIONS[s.ed].wonders[s.wonder].name) : '') + ' · change in Settings</p>' +
       '</div>' +
       (store.last ? '<button class="btn ghost" data-go="study">Study your last game</button>' : '') +
       '<details class="panel" style="gap:6px"><summary style="cursor:pointer;font-weight:650">How 7 Wonders works</summary>' +
@@ -346,6 +348,11 @@
     for (let i = 1; i < n; i++) { names.push('Computer ' + i); bots.push(level); }
     const init = { ed: o.ed || s.ed, n, names, bots, sides: o.sides || sidesOpt(), seed: o.seed != null ? o.seed >>> 0 : (Math.random() * 4294967296) >>> 0 };
     if (init.sides === undefined) delete init.sides;
+    // the Leaders module and a chosen wonder are Settings options; the Daily and the guided game always use the base game
+    if (!o.daily && !o.tutorial) {
+      if (s.leaders) init.leaders = true;
+      if (s.wonder) init.pick = [s.wonder];
+    }
     const st = E.newGame(JSON.parse(JSON.stringify(init)));
     store.game = { state: st, dec: [], undo: [], init, acts: [], level, helped: false, recorded: false, finished: false, daily: o.daily || null, tutorial: !!o.tutorial };
     save();
@@ -510,7 +517,7 @@
       if (k === 'create') {
         const s = store.settings;
         const seats = ['human'].concat(new Array(s.n - 1).fill('empty'));
-        r = await room.createRoom({ name, seats, options: { ed: s.ed, sides: sidesOpt() || (s.ed === 1 ? 'random' : 'choose'), level: s.level } });
+        r = await room.createRoom({ name, seats, options: { ed: s.ed, sides: sidesOpt() || (s.ed === 1 ? 'random' : 'choose'), level: s.level, leaders: !!s.leaders } });
       } else r = await room.joinRoom(code, name);
     } catch (e) { r = { ok: false, message: 'Online play couldn’t load. Check your internet.' }; }
     net.connecting = false;
@@ -589,18 +596,21 @@
     if (!v.last) return '';
     const m = v.last.moves.filter(x => x.s === s);
     if (!m.length) return '';
-    return m.map(x => x.t === 'build' ? 'built <b>' + esc(card(v, x.id).name) + '</b>' + (x.free === 'discard' ? ' (from discard)' : '') : x.t === 'wonder' ? 'built <b>stage ' + x.stage + '</b>' : '<b>sold</b> a card').join(', ');
+    return m.map(x => x.t === 'build' ? 'built <b>' + esc(card(v, x.id).name) + '</b>' + (x.free === 'discard' ? ' (from discard)' : '') : x.t === 'lead' ? 'recruited <b>' + esc(card(v, x.id).name) + '</b>' :
+      x.t === 'wonder' ? 'built <b>stage ' + x.stage + '</b>' + (x.lead ? ' with a leader' : '') : '<b>sold</b> a ' + (x.lead ? 'leader' : 'card')).join(', ');
   }
   function cityChips(v, p, fresh) {
-    const ids = p.city.slice().sort((a, b) => Cd.COLORS.indexOf(card(v, a).color) - Cd.COLORS.indexOf(card(v, b).color));
+    const ids = p.city.slice().sort((a, b) => Cd.COLORS.indexOf(card(v, a).color) - Cd.COLORS.indexOf(card(v, b).color)).concat(p.lead || []);
     return '<div class="citynames">' + ids.map(id => '<span class="mcn' + (fresh && fresh.has(id) ? ' new' : '') + '" style="background:' + A.COLOR_HEX[card(v, id).color] + '">' + esc(card(v, id).name) + '</span>').join('') + '</div>';
   }
   // ---- the table pieces: built cards stacked in colour columns, the wonder board, coins and tokens
-  function cityCols(v, p, fresh) {
+  // empty: a faint note shown (laptop only, see .cempty) while the city has no cards yet
+  function cityCols(v, p, fresh, empty) {
     const by = {};
     for (const id of p.city) { const c = card(v, id); (by[c.color] = by[c.color] || []).push(id); }
+    if (p.lead && p.lead.length) by.white = p.lead.slice();   // recruited leaders: their own column, last
     const rows = Math.max(1, ...Object.values(by).map(a => a.length));
-    return '<div class="citycards" style="--cols:' + Math.max(4, Object.keys(by).length) + ';--rows:' + rows + '">' + Cd.COLORS.filter(col => by[col]).map(col => '<div class="ccol" style="--n:' + by[col].length + '">' +
+    return '<div class="citycards" style="--cols:' + Math.max(4, Object.keys(by).length) + ';--rows:' + rows + '">' + (empty && !Object.keys(by).length ? '<span class="cempty">' + empty + '</span>' : '') + Cd.COLORS.concat('white').filter(col => by[col]).map(col => '<div class="ccol" style="--n:' + by[col].length + '">' +
       by[col].map((id, i) => A.mini(card(v, id), { cls: fresh && fresh.has(id) ? 'new' : '', attr: ' style="--i:' + i + '"' })).join('') + '</div>').join('') + '</div>';
   }
   function milTokens(p) {
@@ -640,7 +650,7 @@
       sells = list.length ? '<span class="sells">' + byPrice.map(g => '<span class="si">' + g.rs.map(r => A.res(r)).join('') + '</span><b class="pr">' + g.c + '¢</b>').join('') + '</span>' : '<span class="sells">none</span>';
     }
     return '<div class="seat' + (side ? ' nb' : '') + '"' + (side ? ' data-nb="' + side + '"' : '') + ' data-city="' + s + '" style="--seat:' + SEAT_COL[s] + '">' +
-      '<div class="plate">' + (side === 'L' ? '◀' : '') + '<span class="dot"></span><span class="nmx">' + esc(p.name.replace(/^Computer /, 'C') + (side ? ' · ' + wname(v, p) : '')) + '</span>' + (side ? backFan(v, p).replace('class="bfan"', 'class="bfan inplate"') : '') + (side === 'R' ? '▶' : '') + '</div>' +
+      '<div class="plate">' + (side === 'L' ? '◀' : '') + '<span class="dot"></span><span class="nmx">' + esc(p.name.replace(/^Computer /, 'C') + (side ? ' · ' + wname(v, p) : '')) + (side ? '' : '<span class="fw"> · ' + esc(wname(v, p)) + '</span>') + '</span>' + (side ? backFan(v, p).replace('class="bfan"', 'class="bfan inplate"') : '') + (side === 'R' ? '▶' : '') + '</div>' +
       (side ? '' : '<div class="pips" title="Wonder stages">' + E.stagesOf(v, p).map((x, k) => '<i' + (k < p.stages ? ' class="on"' : '') + '></i>').join('') + '</div>') +
       '<div class="srow">' + cityCols(v, p) + backFan(v, p) + '</div>' + boardTile(v, p) +
       '<div class="r"><span class="tok"><span class="tbl-coin"></span>' + p.coins + '</span><span class="tok">' + A.shield() + p.shields + '</span>' + sells + '</div>' +
@@ -655,7 +665,8 @@
   function centreHTML(v) {
     const later = [];
     for (let a = v.age + 1; a <= 3; a++) later.push(deckHTML(a, Cd.ageDeck(v.ed, a, v.n).length));
-    return '<div class="ctr"><span class="ageplate">Age ' + AGE[v.age] + ' · ' + (v.phase === 'seventh' ? '7th' : v.turn + '/6') + ' ' + (v.age === 2 ? '▶' : '◀') + '</span>' +
+    const plate = v.phase === 'ldraft' ? 'Leaders ▶' : 'Age ' + AGE[v.age] + ' · ' + (v.phase === 'recruit' || (v.phase === 'discard' && v.inRec) ? 'leaders' : v.phase === 'seventh' ? '7th' : v.turn + '/6') + ' ' + (v.age === 2 ? '▶' : '◀');
+    return '<div class="ctr"><span class="ageplate">' + plate + '</span>' +
       '<div class="piles">' + (later.length ? '<div><div class="later">' + later.join('') + '</div><span class="lbl">Age ' + AGE[v.age + 1] + '</span></div>' : '') +
       '<div>' + deckHTML(v.age, v.discardCount, 'discard') + '<span class="lbl">Discard</span></div></div></div>';
   }
@@ -675,11 +686,13 @@
       const L = log[k];
       for (const m of L.moves) {
         const who = nameOf(v, m.s);
-        const what = m.t === 'build' ? 'built <b>' + esc(card(v, m.id).name) + '</b>' + (m.free === 'chain' ? ' (chain)' : m.free === 'discard' ? ' from the discard' : m.free === 'oly' ? ' free' : (m.pay.L + m.pay.R ? ' paying ' + (m.pay.L + m.pay.R) : '')) :
-          m.t === 'wonder' ? 'built wonder stage ' + m.stage : 'sold a card';
+        const paid = m.pay ? m.pay.L + m.pay.R + (m.pay.B || 0) : 0;
+        const what = m.t === 'build' ? 'built <b>' + esc(card(v, m.id).name) + '</b>' + (m.free === 'chain' ? ' (chain)' : m.free === 'discard' ? ' from the discard' : m.free === 'oly' ? ' free' : (paid ? ' paying ' + paid : '')) :
+          m.t === 'lead' ? 'recruited <b>' + esc(card(v, m.id).name) + '</b>' + (m.coin ? ' for ' + m.coin : '') :
+          m.t === 'wonder' ? 'built wonder stage ' + m.stage + (m.lead ? ' with a leader' : '') : 'sold a ' + (m.lead ? 'leader' : 'card');
         out.push('<li>' + esc(who) + ' ' + what + (m.gain ? ' <span class="num">+' + m.gain + '</span>' : '') + '</li>');
       }
-      out.push('<li class="h">Age ' + AGE[L.age] + ' · turn ' + L.turn + '</li>');
+      out.push('<li class="h">Age ' + AGE[L.age] + ' · ' + (L.turn ? 'turn ' + L.turn : 'leaders') + '</li>');
     }
     for (const w of (v.wars || []).slice().reverse()) {
       void w;
@@ -697,9 +710,11 @@
   function citySheet(v, s) {
     const p = v.players[s];
     const sc = E.scoreOne(v, s);
+    const lead = (p.lead || []).map(id => card(v, id));
     sheet(nameOf(v, s) + ' · ' + wname(v, p), boardHTML(v, s) +
+      (lead.length ? '<div class="small" style="margin-top:8px"><b>Leaders</b><br>' + lead.map(c => '<b>' + esc(c.name) + '</b>: <span class="muted">' + esc(c.text) + '</span>').join('<br>') + '</div>' : '') +
       '<div style="margin-top:10px">' + playerRow(v, s) + '</div>' +
-      '<p class="small muted" style="margin:8px 0 0">Points if the game ended now: <b class="num" style="color:var(--text)">' + sc.total + '</b> (military ' + sc.military + ', coins ' + sc.coins + ', wonder ' + sc.wonder + ', civil ' + sc.civil + ', science ' + sc.science + ', commerce ' + sc.commerce + ', guilds ' + sc.guilds + ')</p>');
+      '<p class="small muted" style="margin:8px 0 0">Points if the game ended now: <b class="num" style="color:var(--text)">' + sc.total + '</b> (military ' + sc.military + ', coins ' + sc.coins + ', wonder ' + sc.wonder + ', civil ' + sc.civil + ', science ' + sc.science + ', commerce ' + sc.commerce + ', guilds ' + sc.guilds + (v.lead ? ', leaders ' + (sc.leaders || 0) : '') + ')</p>');
   }
 
   // odds for the selected card at the moment of choosing
@@ -727,7 +742,7 @@
     if (v.phase === 'over') { renderEnd(v, pl); fxRun(pl); return; }
     const me = v.players[ME];
     const L = E.left(v, ME), R = E.right(v, ME);
-    const key = v.age + ':' + v.turn + ':' + v.phase;
+    const key = v.age + ':' + v.turn + ':' + v.phase + ':' + (v.lhand ? v.lhand.length : '');
     const newTurn = key !== ui.prevKey;
     if (newTurn) { resetSel(); ui.prevKey = key; }
     // newly built cards (for the pop animation)
@@ -751,6 +766,12 @@
       const id = v.discardPile[ui.sel];
       actHTML = '<div class="head"><b>Free build from the discard pile</b></div><div class="tx">' + (id ? esc(card(v, id).name) + ': ' + esc(Cd.effectText(card(v, id))) : 'Your wonder lets you build one discarded card for free. Tap one.') + '</div>' +
         '<div class="btns" style="grid-template-columns:1fr 1fr"><button class="btn primary" data-dbuild' + (id ? '' : ' disabled') + '>Build free</button><button class="btn" data-dskip>Skip</button></div>';
+    } else if ((v.phase === 'ldraft' || v.phase === 'recruit') && toAct && v.lhand) {
+      // Leaders: the draft (keep one of the leaders handed to you) and the recruitment at the start of each age
+      handHTML = '<div class="fan">' + v.lhand.map((id, k) => A.face(card(v, id), { cls: (ui.sel === k ? 'sel is-up ' : '') + (v.phase === 'recruit' && E.leadCost(me, id) > me.coins ? 'dim ' : '') + (newTurn ? 'fanin' : ''),
+        attr: ' data-pick="' + k + '"', badge: E.leadCost(me, id) !== card(v, id).coin ? '<span class="st">free</span>' : '' })).join('') + '</div>';
+      fanSel = ui.sel;
+      actHTML = leaderPanel(v, me);
     } else if ((v.phase === 'pick' || v.phase === 'seventh') && toAct) {
       const ranked = (store.settings.values || ui.hint) ? rankNow(v) : null;
       // the card values on show make this game "with help" in My stats
@@ -767,7 +788,7 @@
         const o = opts[k];
         const can = o.build.ok || o.oly;
         const badge = (store.settings.values && ranked ? '<div class="val" style="color:' + heat(val[k], lo, hi) + '">' + (val[k] >= 0 ? '+' : '') + val[k].toFixed(1) + '</div>' : '') +
-          (o.build.ok ? (o.build.free ? '<span class="st">free</span>' : (o.build.coin + o.build.opts[0].L + o.build.opts[0].R ? '<span class="st">' + (o.build.coin + o.build.opts[0].L + o.build.opts[0].R) + '¢</span>' : '')) : '');
+          (o.build.ok ? (o.build.free ? '<span class="st">free</span>' : (o.build.coin + o.build.opts[0].L + o.build.opts[0].R + (o.build.opts[0].B || 0) ? '<span class="st">' + (o.build.coin + o.build.opts[0].L + o.build.opts[0].R + (o.build.opts[0].B || 0)) + '¢</span>' : '')) : '');
         return A.face(card(v, id), { cls: (ui.sel === k ? 'sel is-up ' : '') + (can ? '' : 'dim ') + (ui.hint && best && best.a.i === k ? 'hint ' : '') + (newTurn && !dealIn ? 'fanin' : ''),
           attr: ' data-pick="' + k + '"' + (newTurn && !dealIn ? ' style="animation-delay:' + (pl.handDelay + k * Math.round(35 * fxSp())) + 'ms"' : ''), badge });
       }).join('') + '</div>';
@@ -788,7 +809,7 @@
       '<button class="icon-btn" id="btn-log" title="Log" aria-label="Log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>' +
       '<button class="icon-btn" id="btn-menu" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div></div>' +
       '<div class="nbs">' + seatHTML(v, L, 'L', pr) + centreHTML(v) + seatHTML(v, R, 'R', pr) + '</div>' +
-      '<div class="me" data-city="' + ME + '"><div class="mytop">' + cityCols(v, me, fresh) +
+      '<div class="me" data-city="' + ME + '"><div class="mytop">' + cityCols(v, me, fresh, 'Your city · built cards stack here by colour') +
       '<div class="mine-tok"><span class="tok" data-fx="coin" title="Coins">' + coinPile(me.coins) + '<b>' + coinStart(pl, me.coins) + '</b></span>' +
       '<span class="tok" data-fx="shield" title="Shields">' + A.shield() + '<b>' + me.shields + '</b></span></div></div>' +
       boardTile(v, me, '<span class="laurel" title="Points if the game ended now">' + est + '</span>') +
@@ -811,7 +832,29 @@
   function waitHTML(v) {
     const names = v.waiting.filter(s => s !== ME).map(s => v.players[s].name);
     return '<div class="wait"><span class="dots"><i></i><i></i><i></i></span>' + (names.length ? 'Waiting for ' + esc(names.slice(0, 3).join(', ')) + (names.length > 3 ? '…' : '') : 'Working…') + '</div>' +
-      (v.pick ? '<div class="tx">Your pick: ' + esc(v.pick.t === 'sell' ? 'sell ' : v.pick.t === 'wonder' ? 'wonder stage with ' : 'build ') + esc(card(v, v.pick.id).name) + '</div>' : '');
+      (v.pick ? '<div class="tx">Your pick: ' + esc(({ sell: 'sell ', wonder: 'wonder stage with ', lkeep: 'keep ', lrec: 'recruit ', lstage: 'wonder stage with ', lsell: 'sell ' })[v.pick.t] || 'build ') + esc(card(v, v.pick.id).name) + '</div>' : '');
+  }
+  const payLabel = p => [p.L ? '◀' + p.L : '', p.B ? 'bank ' + p.B : '', p.R ? p.R + '▶' : ''].filter(Boolean).join(' · ') || 'own';
+  // the Leaders draft and recruitment: keep one / recruit, stage or sell the selected leader
+  function leaderPanel(v, me) {
+    const k = ui.sel, id = v.lhand[k], draft = v.phase === 'ldraft';
+    const intro = draft ? 'Keep one leader; the rest pass right ▶. After three picks the last one handed to you is your fourth.' :
+      'Recruit one (its coins go to the bank), use it to build your next wonder stage, or sell it for 3 coins.' + (v.age === 3 ? ' The leader you don’t play goes back to the box.' : '');
+    const head = draft ? 'Leaders draft · pick ' + Math.min(3, 5 - v.lhand.length) + ' of 3' : 'Age ' + AGE[v.age] + ': play a leader';
+    if (k < 0 || !id) return '<div class="head"><b>' + head + '</b></div><div class="tx">' + intro + '</div>';
+    const c = card(v, id);
+    if (draft) return '<div class="head"><span class="cchip" style="background:' + A.COLOR_HEX.white + '"></span><b>' + esc(c.name) + '</b><span class="grow"></span><span class="small">costs ' + c.coin + '¢</span></div>' +
+      '<div class="tx">' + esc(c.text) + '</div><div class="btns" style="grid-template-columns:1fr"><button class="btn primary" data-ldo="lkeep">Keep ' + esc(c.name) + '</button></div>';
+    const cost = E.leadCost(me, id), w = E.stageCost(v, ME), pi = typeof ui.pay === 'number' ? ui.pay : 0;
+    const wP = w.ok ? (w.opts[Math.min(pi, w.opts.length - 1)] || w.opts[0]) : null;
+    const wTot = wP ? wP.L + wP.R + (wP.B || 0) : 0;
+    const multi = w.ok && w.opts.length > 1 ? '<div class="pays">' + w.opts.slice(0, 5).map((p, j) => '<button data-pay="' + j + '" aria-pressed="' + (pi === j) + '">' + payLabel(p) + '</button>').join('') + '</div>' : '';
+    return '<div class="head"><span class="cchip" style="background:' + A.COLOR_HEX.white + '"></span><b>' + esc(c.name) + '</b></div>' +
+      '<div class="tx">' + esc(c.text) + '</div>' + multi +
+      '<div class="btns">' +
+      '<button class="btn primary" data-ldo="lrec"' + (cost <= me.coins ? '' : ' disabled') + '>Recruit<small>' + (cost <= me.coins ? (cost ? cost + '¢' : 'free') : 'coins') + '</small></button>' +
+      '<button class="btn" data-ldo="lstage"' + (w.ok ? '' : ' disabled') + '>Stage<small>' + (w.ok ? (wTot ? wTot + '¢' : 'own') : esc(shortWhy(w.why))) + '</small></button>' +
+      '<button class="btn" data-ldo="lsell">Sell<small>+3¢</small></button></div>';
   }
   function actPanel(v, opts, ranked) {
     const k = ui.sel;
@@ -819,7 +862,8 @@
       const sc = E.stageCost(v, ME);
       return '<div class="head"><b>' + (v.phase === 'seventh' ? 'Play your 7th card' : 'Pick a card') + '</b><span class="grow"></span>' + (ui.hint && ranked && ranked[0] ? '<span class="small">Hint: <b>' + hintWords(v, ranked[0]) + '</b></span>' : '') + '</div>' +
         '<div class="tx">' + (v.phase === 'pick' ? 'Hands pass ' + (v.age === 2 ? 'right ▶' : '◀ left') + ' this age. ' : '') + (sc.ok ? 'Your next wonder stage is affordable.' : 'Next wonder stage: ' + esc(sc.why || '')) + '</div>' +
-        (store.settings.odds && v.phase === 'pick' ? '<div class="odds">' + (v.turn + v.n <= 6 ? 'This hand comes back on turn <b>' + (v.turn + v.n) + '</b>' : 'You won’t see this hand again') + (v.age === 3 ? ' · ' + (v.n + 2) + ' guilds in this age' : '') + '</div>' : '');
+        (store.settings.odds && v.phase === 'pick' ? '<div class="odds">' + (v.turn + v.n <= 6 ? 'This hand comes back on turn <b>' + (v.turn + v.n) + '</b>' : 'You won’t see this hand again') + (v.age === 3 ? ' · ' + (v.n + 2) + ' guilds in this age' : '') + '</div>' : '') +
+        (v.lhand && v.lhand.length ? '<div class="odds">Leaders kept for later: <b>' + v.lhand.map(x => esc(card(v, x).name)).join(', ') + '</b></div>' : '');
     }
     const id = v.hand[k];
     const c = card(v, id);
@@ -827,12 +871,12 @@
     const b = o.build;
     const w = o.wonder;
     const pays = b.ok ? b.opts : w.ok ? w.opts : [];
-    const payLabel = p => (p.L ? '◀' + p.L : '') + (p.L && p.R ? ' · ' : '') + (p.R ? p.R + '▶' : '') || 'own';
     // Olympia A: the once-per-age free build may be used on any card, also one you could pay for
     const olyAlt = olyChoice(v, o);
     const useOly = olyAlt && ui.pay === 'oly';
     const pi = typeof ui.pay === 'number' ? ui.pay : 0;
-    const bTot = b.ok && !b.free ? b.coin + (b.opts[pi] || b.opts[0]).L + (b.opts[pi] || b.opts[0]).R : 0;
+    const bP = b.ok && !b.free ? (b.opts[pi] || b.opts[0]) : null;
+    const bTot = bP ? b.coin + bP.L + bP.R + (bP.B || 0) : 0;
     const bCost = useOly ? 'free (wonder)' : b.ok ? (b.free ? (b.free === 'chain' ? 'chain' : 'free') : bTot ? bTot + '¢' : (c.res ? 'own' : 'free')) : '';
     const wP = w.ok ? (w.opts[Math.min(pi, w.opts.length - 1)] || w.opts[0]) : null;
     const valOf = kind => { if (!ranked) return ''; const r = ranked.find(x => x.a.i === k && x.kind === kind); return r ? ' · ' + (r.v >= 0 ? '+' : '') + r.v.toFixed(1) : ''; };
@@ -844,7 +888,7 @@
       (store.settings.odds ? '<div class="odds">' + oddsFor(v, id) + '</div>' : '') + multi +
       '<div class="btns">' +
       '<button class="btn primary" data-do="build"' + (b.ok || o.oly ? '' : ' disabled') + '>Build<small>' + (b.ok ? bCost : o.oly ? 'free (wonder)' : esc(shortWhy(b.why))) + valOf(b.ok && !useOly ? 'build' : 'oly') + '</small></button>' +
-      '<button class="btn" data-do="wonder"' + (w.ok ? '' : ' disabled') + '>Stage<small>' + (w.ok ? (wP.L + wP.R ? wP.L + wP.R + '¢' : 'own') : esc(shortWhy(w.why))) + valOf('wonder') + '</small></button>' +
+      '<button class="btn" data-do="wonder"' + (w.ok ? '' : ' disabled') + '>Stage<small>' + (w.ok ? (wP.L + wP.R + (wP.B || 0) ? wP.L + wP.R + (wP.B || 0) + '¢' : 'own') : esc(shortWhy(w.why))) + valOf('wonder') + '</small></button>' +
       '<button class="btn" data-do="sell">Sell<small>+3¢' + valOf('sell') + '</small></button></div>';
   }
   function olyChoice(v, o) { return !!(o && o.build.ok && !o.build.free && E.olyReady(v, v.players[ME])); }
@@ -919,6 +963,15 @@
     if (dp) { const k = Number(dp.dataset.dpick); ui.sel = ui.sel === k ? -1 : k; FX.play('cardFlip', { vol: 0.6 }); renderGame(); return; }
     if (t.closest('[data-dbuild]')) { doAct({ t: 'discard', id: v.discardPile[ui.sel] }); return; }
     if (t.closest('[data-dskip]')) { doAct({ t: 'discard', id: null }); return; }
+    const ld = t.closest('[data-ldo]');
+    if (ld && ui.sel >= 0 && v.lhand && v.lhand[ui.sel]) {
+      const a = { t: ld.dataset.ldo, i: ui.sel };
+      if (a.t === 'lstage') { const w = E.stageCost(v, ME), pi = typeof ui.pay === 'number' ? ui.pay : 0; if (w.ok) a.pay = w.opts[Math.min(pi, w.opts.length - 1)]; }
+      if (net.busy) return;
+      FX.play('cardSlide');
+      doAct(a);
+      return;
+    }
     const pay = t.closest('[data-pay]');
     if (pay) { ui.pay = pay.dataset.pay === 'oly' ? 'oly' : Number(pay.dataset.pay); renderGame(); return; }
     const d = t.closest('[data-do]');
@@ -958,7 +1011,8 @@
       return;
     }
     const g = store.game;
-    const before = JSON.stringify(g.state), nDec = Math.max(0, (g.dec || []).length - (a.t === 'side' || a.t === 'discard' ? 0 : 1)), nActs = (g.acts || []).length;
+    const noDec = a.t === 'side' || a.t === 'discard' || /^l(keep|rec|stage|sell)$/.test(a.t);   // leader moves aren't studied
+    const before = JSON.stringify(g.state), nDec = Math.max(0, (g.dec || []).length - (noDec ? 0 : 1)), nActs = (g.acts || []).length;
     let ok = true;
     try { table.act(a); } catch (err) { ok = false; ui.fx.land = 0; FX.play('error'); toast(err.message || 'Can’t do that'); }
     if (ok) {
@@ -1005,7 +1059,7 @@
     const R = v.result;
     const cell = (x, cls) => '<td' + (cls ? ' class="' + cls + '"' : '') + ' data-v="' + x + '">' + (zero ? 0 : x) + '</td>';
     const head = '<tr><th></th>' + v.players.map((p, i) => '<th title="' + esc(p.name) + '">' + esc(i === me ? 'You' : p.name.replace('Computer ', 'C')) + '</th>').join('') + '</tr>';
-    const rows = CATS.map(([k, label, col]) => '<tr><td><span class="rowl">' + (col ? A.chip(col) : A.stageIc()) + label + '</span></td>' + R.scores.map(s => cell(s[k])).join('') + '</tr>').join('');
+    const rows = CATS.concat(v.lead ? [['leaders', 'Leaders', 'white']] : []).map(([k, label, col]) => '<tr><td><span class="rowl">' + (col ? A.chip(col) : A.stageIc()) + label + '</span></td>' + R.scores.map(s => cell(s[k] || 0)).join('') + '</tr>').join('');
     const tot = '<tr class="tot"><td>Total</td>' + R.scores.map((s, i) => cell(s.total, R.winners.indexOf(i) >= 0 ? 'win' : '')).join('') + '</tr>';
     return '<table class="sc"><thead>' + head + '</thead><tbody>' + rows + tot + '</tbody></table>';
   }
@@ -1281,11 +1335,12 @@
     const me = L.me || 0;
     const d = (L.dec || []).find(x => x.age === T.age && x.turn === T.turn);
     const moves = T.moves.slice().sort((a, b) => (a.s === me ? -1 : b.s === me ? 1 : a.s - b.s)).map(m => '<li>' + esc(m.s === me ? 'You' : v.players[m.s].name) + ' ' +
-      (m.t === 'build' ? 'built <b>' + esc(card(v, m.id).name) + '</b>' : m.t === 'wonder' ? 'built wonder stage ' + m.stage : 'sold a card') + '</li>').join('');
+      (m.t === 'build' ? 'built <b>' + esc(card(v, m.id).name) + '</b>' : m.t === 'lead' ? 'recruited <b>' + esc(card(v, m.id).name) + '</b>' :
+        m.t === 'wonder' ? 'built wonder stage ' + m.stage + (m.lead ? ' with a leader' : '') : 'sold a ' + (m.lead ? 'leader' : 'card')) + '</li>').join('');
     const word = x => (x.kind === 'sell' ? 'Sell ' : x.kind === 'wonder' ? 'Stage: ' : '') + esc(E.card(v, x.id).name);
     return '<div class="panel replay" style="gap:6px"><div class="row"><span class="label grow">Replay</span>' +
       '<button class="btn small" style="min-width:44px" data-rp="-1"' + (i ? '' : ' disabled') + ' aria-label="Previous turn">‹</button>' +
-      '<b class="small" style="min-width:104px;text-align:center">Age ' + AGE[T.age] + ' · turn ' + T.turn + '</b>' +
+      '<b class="small" style="min-width:104px;text-align:center">Age ' + AGE[T.age] + ' · ' + (T.turn ? 'turn ' + T.turn : 'leaders') + '</b>' +
       '<button class="btn small" style="min-width:44px" data-rp="1"' + (i < F.length - 1 ? '' : ' disabled') + ' aria-label="Next turn">›</button></div>' +
       '<input type="range" min="0" max="' + (F.length - 1) + '" value="' + i + '" data-rpr aria-label="Turn" style="width:100%">' +
       (d && d.lost >= 0.05 ? '<div class="small muted">Hard would have: <b style="color:var(--text)">' + word(d.best) + '</b> (−' + d.lost.toFixed(1) + ')</div>' : '') +
@@ -1315,7 +1370,10 @@
       '<div class="panel"><div class="row"><span class="label grow">Edition</span>' + qBtn('1st edition (2010) is the default and is checked card by card against the published rulebook. 2nd edition (2020) changes some costs, points and wonder boards, and swaps a few cards (Well for Pawnshop, Decorators for Strategists). Details: docs/rules-check.md.') + '</div>' +
       '<div class="seg" data-ed style="margin-top:8px"><button aria-pressed="' + (s.ed === 1) + '" data-v="1">1st edition</button><button aria-pressed="' + (s.ed === 2) + '" data-v="2">2nd edition</button></div></div>' +
       '<div class="panel"><div class="row"><span class="label grow">Wonder sides</span>' + qBtn('The 1st-edition rules deal each wonder with a random side; the 2nd edition lets everyone choose. Rulebook default follows your edition. Side A is easier; side B is trickier.') + '</div>' +
-      '<div class="seg sm" data-sides style="margin-top:8px">' + [['default', 'Rulebook'], ['random', 'Random'], ['choose', 'Choose'], ['A', 'All A'], ['B', 'All B']].map(([k, l]) => '<button aria-pressed="' + (s.sides === k) + '" data-v="' + k + '">' + l + '</button>').join('') + '</div></div>' +
+      '<div class="seg sm" data-sides style="margin-top:8px">' + [['default', 'Rulebook'], ['random', 'Random'], ['choose', 'Choose'], ['A', 'All A'], ['B', 'All B']].map(([k, l]) => '<button aria-pressed="' + (s.sides === k) + '" data-v="' + k + '">' + l + '</button>').join('') + '</div>' +
+      '<div class="setrow"><div class="grow"><b>Your wonder</b><span>Play a wonder of your choice; the others stay random.</span></div><select data-wonder aria-label="Your wonder">' +
+      ['', ...Cd.WONDER_IDS].map(w => '<option value="' + w + '"' + (s.wonder === w ? ' selected' : '') + '>' + (w ? esc(Cd.EDITIONS[s.ed].wonders[w].name) : 'Random') + '</option>').join('') + '</select></div></div>' +
+      '<div class="panel">' + sw('leaders', 'Leaders expansion', 'Off = base game. Draft 4 leaders, play one at the start of each age; 6 starting coins.') + '</div>' +
       '<div class="panel">' + sw('values', 'Card values', 'Hard’s points estimate on every card') + sw('odds', 'Odds line', 'Hand comes back, next player, copies') + '</div>' +
       (SC || SP ? '<div class="panel">' +
         (SP ? '<div class="setrow"><div class="grow"><b>My stats</b><span>Wins per level, rating, awards and the Daily.</span></div><button class="btn small" data-stats>Open</button></div>' : '') +
@@ -1342,7 +1400,11 @@
       location.reload();
     });
   });
-  vSet.addEventListener('change', e => { const k = e.target.dataset.sw; if (k) { store.settings[k] = e.target.checked; save(); } });
+  vSet.addEventListener('change', e => {
+    if (e.target.matches('[data-wonder]')) { store.settings.wonder = e.target.value; save(); if (table && !table.online) toast('Applies to your next game'); return; }
+    const k = e.target.dataset.sw;
+    if (k) { store.settings[k] = e.target.checked; save(); if (k === 'leaders' && table && !table.online) toast('Applies to your next game'); }
+  });
 
   // ------------------------------------------------------------------ boot
   if (SP) {
