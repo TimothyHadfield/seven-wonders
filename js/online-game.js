@@ -12,7 +12,7 @@
     id: 'seven-wonders',
     minSeats: 3,
     maxSeats: 7,
-    // options: {ed: 1|2, sides: 'random'|'choose'|'A'|'B', level: 'easy'|'medium'|'hard'}
+    // options: {ed: 1|2, sides: 'random'|'choose'|'A'|'B', level: 'easy'|'medium'|'hard', leaders: bool}
     setup(nSeats, options, rng, seats) {
       const o = options || {};
       const level = LEVELS.indexOf(o.level) >= 0 ? o.level : 'medium';
@@ -24,7 +24,7 @@
         names.push(String(s.name || (s.kind === 'computer' ? 'Computer ' + (i + 1) : 'Player ' + (i + 1))).slice(0, 24));
       }
       const st = E.newGame({ ed: o.ed === 2 ? 2 : 1, n, names, bots, sides: ['random', 'choose', 'A', 'B'].indexOf(o.sides) >= 0 ? o.sides : undefined,
-        seed: Math.floor(rng() * 4294967296) >>> 0 });
+        seed: Math.floor(rng() * 4294967296) >>> 0, leaders: !!o.leaders });
       st.level = level;
       return st;
     },
@@ -37,12 +37,14 @@
     },
     privateView(state, seat) {
       const v = E.view(state, seat);
-      return { hand: v.hand, pick: v.pick, discardPile: v.discardPile };
+      const r = { hand: v.hand, pick: v.pick, discardPile: v.discardPile };
+      if (v.lhand) r.lhand = v.lhand;
+      return r;
     },
     // a seat handed to a computer mid-game
     bot(ctx, seat) {
       const st = ctx.state;
-      const kind = st.phase === 'side' ? 'side' : st.phase === 'discard' ? 'discard' : 'pick';
+      const kind = ['side', 'discard', 'ldraft', 'recruit'].indexOf(st.phase) >= 0 ? st.phase : 'pick';
       return Bots.decide(st, seat, kind, st.level || 'medium');
     },
     isOver(state) { return E.isOver(state); },
@@ -50,7 +52,7 @@
   // the screens use the same shape as SWEngine.view(state, seat)
   function viewFromSnap(snap) {
     const m = snap.mine || {};
-    return Object.assign({}, snap.pub, { seat: snap.mySeat, hand: m.hand || [], pick: m.pick || null, discardPile: m.discardPile || null });
+    return Object.assign({}, snap.pub, { seat: snap.mySeat, hand: m.hand || [], pick: m.pick || null, discardPile: m.discardPile || null, lhand: m.lhand || null });
   }
   return { game, viewFromSnap };
 });

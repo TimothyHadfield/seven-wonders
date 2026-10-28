@@ -153,9 +153,9 @@
     const out = [];
     const opts = E.options(g, seat, hand);
     for (const o of opts) {
-      if (o.build.ok) out.push({ a: { t: 'build', i: o.i, pay: o.build.opts[0] }, kind: 'build', id: o.id, cost: o.build.coin + o.build.opts[0].L + o.build.opts[0].R, pay: o.build.opts[0], free: o.build.free });
+      if (o.build.ok) out.push({ a: { t: 'build', i: o.i, pay: o.build.opts[0] }, kind: 'build', id: o.id, cost: o.build.coin + o.build.opts[0].L + o.build.opts[0].R + (o.build.opts[0].B || 0), pay: o.build.opts[0], free: o.build.free });
       if (o.oly) out.push({ a: { t: 'build', i: o.i, oly: true }, kind: 'oly', id: o.id, cost: 0, pay: { L: 0, R: 0 } });
-      if (o.wonder.ok) out.push({ a: { t: 'wonder', i: o.i, pay: o.wonder.opts[0] }, kind: 'wonder', id: o.id, cost: o.wonder.opts[0].L + o.wonder.opts[0].R, pay: o.wonder.opts[0] });
+      if (o.wonder.ok) out.push({ a: { t: 'wonder', i: o.i, pay: o.wonder.opts[0] }, kind: 'wonder', id: o.id, cost: o.wonder.opts[0].L + o.wonder.opts[0].R + (o.wonder.opts[0].B || 0), pay: o.wonder.opts[0] });
       out.push({ a: { t: 'sell', i: o.i }, kind: 'sell', id: o.id, cost: -3, pay: { L: 0, R: 0 } });
     }
     return out;
@@ -169,6 +169,7 @@
   function coinsNow(g, seat, id) {
     const c = E.card(g, id);
     let n = c.e.coins || 0;
+    if (c.color === 'yellow' && E.hasLead(g.players[seat], 'yellowCoins')) n += 2;
     if (c.color === 'yellow' && c.e.per) {
       const h = withCard(g, seat, id, false);
       for (const pe of c.e.per) if (pe.coin) n += pe.coin * E.countFor(h, seat, pe);
@@ -189,7 +190,7 @@
     } else {
       const c = E.card(g, ch.id);
       if (W.exact3 && g.age === 3 && !c.e.sh) v = exactDelta(g, seat, ch.id, false) + coinsNow(g, seat, ch.id) / 3;
-      else v = cardValue(g, seat, ch.id, W);
+      else v = cardValue(g, seat, ch.id, W) + (g.lead ? leaderBonus(g, seat, c, W) : 0);
       v -= ch.cost * cv + (ch.pay.L + ch.pay.R) * W.pay;
       if (ch.kind === 'oly') v -= 1.2 * (4 - g.age) / 3; // spending the once-per-age free build
     }
@@ -226,6 +227,7 @@
       }
       return { t: 'discard', id: best };
     }
+    if (kind === 'ldraft' || kind === 'recruit') return leaderMove(g, seat, kind, level, r);
     const hand = st.players[seat].hand;
     const ch = choices(g, seat, hand);
     if (level === 'easy') {
@@ -250,6 +252,98 @@
       if (v > bv) { bv = v; best = c; }
     }
     return best.a;
+  }
+
+  // ---------------------------------------------------------------- Leaders module
+  // Cards of each colour a city holds at the end (average over Hard/Medium self-play, 4 players, tools/ladder.js run).
+  const AVG = { brown: 2.6, grey: 1.6, blue: 3.4, yellow: 2.0, red: 2.6, green: 2.5, purple: 1.2 };
+  // share of the game's cards still to come (a colour's purple cards all come in Age III)
+  function leftShare(g, col) {
+    const done = (g.age - 1) * 6 + (g.phase === 'pick' || g.phase === 'seventh' ? g.turn - 1 : 0);
+    if (col === 'purple') return g.age < 3 ? 1 : Math.max(0, 1 - done % 6 / 6);
+    return Math.max(0, 1 - done / 18);
+  }
+  // points-equivalent of recruiting leader id now (not counting its coin cost)
+  function leaderValue(g, seat, id, W) {
+    const e = E.LEADERS.byKey[id].e;
+    const p = g.players[seat];
+    const cv = coinValue(g, p, W);
+    const left = leftShare(g, 'brown'), agesLeft = 4 - g.age;
+    const expect = col => E.countColor(g, p, col) + AVG[col] * leftShare(g, col);
+    let v = 0;
+    if (e.vp) v += e.vp;
+    if (e.sh) v += milDelta(g, seat, e.sh, W);
+    if (e.sci) v += sciDelta(g, seat, e.sci, false, W);
+    if (e.coins) v += e.coins * cv;
+    if (e.per) for (const pe of e.per) {
+      if (pe.of === 'stage') { const tot = E.stagesOf(g, p).length || 3; v += pe.vp * (p.stages + (tot - p.stages) * 0.75 * left); }
+      else v += pe.vp * expect(pe.of);
+    }
+    if (e.tok) v += e.tok * (p.mil.filter(x => x > 0).length + 0.9 * agesLeft);
+    if (e.setx) { const s = E.sciSymbols(g, p); v += e.setx * Math.max(Math.min(s.c.compass, s.c.gear, s.c.tablet), expect('green') / 3 * 0.6); }
+    if (e.sets) v += e.setvp * Math.max(0, Math.min.apply(null, e.sets.map(expect)) * 0.8 - (e.sets.length > 3 ? 0.3 : 0));
+    if (e.coinvp) v += Math.max(p.coins, 7) / 3 * 0.9;
+    if (e.disc) v += 1.2 * (e.disc === 'stage' ? Math.max(0, (E.stagesOf(g, p).length || 3) - p.stages) * left : AVG[e.disc] * leftShare(g, e.disc));
+    if (e.freeLead) v += Math.min(agesLeft - 1, 2) * 3 * cv;
+    if (e.freeGuild) v += g.age <= 3 ? 3.2 * leftShare(g, 'purple') : 0;
+    if (e.bank) v += 1.6 * agesLeft;
+    if (e.tradeBack) v += 3 * agesLeft * cv;
+    if (e.yellowCoins) v += 2 * AVG.yellow * left * cv;
+    if (e.chainCoins) v += 2 * 3 * left * cv;
+    if (e.winCoins) v += 2 * 0.9 * agesLeft * cv;
+    if (e.tomyris) v += 1.2 * agesLeft;
+    if (e.solomon) v += g.age === 1 || !g.discardCount ? 0 : 1.5 + g.age;
+    return v;
+  }
+  // value of a leader seen from the draft: who knows which age it comes out in, so judged as if recruited in Age I
+  function leaderMove(g, seat, kind, level, r) {
+    const p = g.players[seat];
+    const L = g.lhand || [];
+    if (!L.length) return null;
+    const W = weights(level);
+    if (kind === 'ldraft') {
+      if (level === 'easy') return { t: 'lkeep', i: Math.floor(r() * L.length) };
+      let bi = 0, bv = -1e9;
+      L.forEach((id, i) => {
+        let v = leaderValue(g, seat, id, W) - E.LEADERS.byKey[id].coin * coinValue(g, p, W) * 0.6;
+        if (W.noise) v += (r() - 0.5) * 2 * W.noise;
+        if (v > bv) { bv = v; bi = i; }
+      });
+      return { t: 'lkeep', i: bi };
+    }
+    const afford = L.map((id, i) => i).filter(i => E.leadCost(p, L[i]) <= p.coins);
+    if (level === 'easy') {
+      if (afford.length && r() < 0.85) return { t: 'lrec', i: afford[Math.floor(r() * afford.length)] };
+      return { t: 'lsell', i: Math.floor(r() * L.length) };
+    }
+    const cv = coinValue(g, p, W);
+    const val = L.map(id => leaderValue(g, seat, id, W));
+    let worst = 0;
+    val.forEach((x, i) => { if (x - E.LEADERS.byKey[L[i]].coin * cv < val[worst] - E.LEADERS.byKey[L[worst]].coin * cv) worst = i; });
+    const opts = [];
+    for (const i of afford) opts.push({ a: { t: 'lrec', i }, v: val[i] - E.leadCost(p, L[i]) * cv });
+    const sc = E.stageCost(g, seat);
+    if (sc.ok) { const o = sc.opts[0]; opts.push({ a: { t: 'lstage', i: worst, pay: o }, v: stageValue(g, seat, W) - (o.L + o.R + (o.B || 0)) * (cv + W.pay) }); }
+    opts.push({ a: { t: 'lsell', i: worst }, v: 3 * cv - W.sellPen });
+    let best = opts[0];
+    for (const o of opts) { if (W.noise) o.v += (r() - 0.5) * 2 * W.noise; if (o.v > best.v) best = o; }
+    return best.a;
+  }
+  // a leader in your city that scores per card of a colour makes those cards worth more (Ages I-II; Age III is exact)
+  function leaderBonus(g, seat, c, W) {
+    const p = g.players[seat];
+    if (!p.lead || !p.lead.length) return 0;
+    let v = 0;
+    for (const lid of p.lead) {
+      const e = E.LEADERS.byKey[lid].e;
+      if (e.per) for (const pe of e.per) if (pe.of === c.color) v += pe.vp * W.perMul;
+      if (e.sets && e.sets.indexOf(c.color) >= 0) {
+        const have = e.sets.map(col => E.countColor(g, p, col));
+        if (E.countColor(g, p, c.color) === Math.min.apply(null, have)) v += e.setvp / e.sets.length * 0.8;
+      }
+      if (e.yellowCoins && c.color === 'yellow') v += 2 * coinValue(g, p, W);
+    }
+    return v;
   }
 
   // which side the stronger computers pick (from measurements, see docs/ideas.md)
