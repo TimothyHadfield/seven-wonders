@@ -70,7 +70,8 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - Common brief: exact rules and card counts, original art only, $0, phone-first with a real laptop layout, no page scroll on main screens, bottom tabs on phone, "?" explains why, choices in Settings, odds at the point of decision, measured computers behind "How strong?".
 
 ## Traps
-- `js/online.js` is a COPY of `../_online/online.js`. Never edit it here.
+- **Kits re-copied 2026-10-27 (kitfix):** game-coach 1.1.0 (rules tabs wrap; a note beside a tall target keeps title + 2 lines + buttons) and game-pwa 1.3.0 (`data-extra`). Copies stay byte-identical to `../_coach` / `../_pwa`.
+- `js/online.js` is a COPY of `../_online/online.js`. Never edit it here. **Cache stamp (2026-10-27):** `js/app.js` imports `js/online.js?v=a3d0418b`, the `_online` content stamp. After a re-copy: put the new stamp from `node ../_online/tools/stamp.mjs` there, bump app.js's `?v=` (and pwa.js `data-version`), then `node ../_online/tools/stamp.mjs --check .` must say OK.
 - After changing `js/bots.js`: rerun measure-levels and update `STRENGTH_NOTE` in `js/app.js`; rerun draft-stats.
 - `tools/mutate.js` and `tools/tune.js` use every CPU core; browser tests run at the same time get click timeouts. Run them apart.
 - Card names are hyphenated by hand (`softName` in `js/art.js`), because Playwright's WebKit on Windows doesn't hyphenate.
