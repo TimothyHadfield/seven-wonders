@@ -142,6 +142,7 @@
   }
   FX.onChange(fxBody); fxBody();
   const fxSp = () => (FX.settings.animSpeed === 'fast' ? 0.55 : 1);
+  const FINALE_MS = 4500, FINALE_FAST = 2500; // the last plays stay on the table this long before the score sheet
   function fxFind(t) {
     if (ui.tab !== 'play' || !t) return null;
     if (t === 'coin') return $('#game [data-fx="coin"]');
@@ -738,8 +739,28 @@
   function renderGame() {
     const v = table.view();
     const toAct = v.waiting.indexOf(ME) >= 0 && !(v.phase === 'pick' && v.pick);
-    const pl = fxStep(v, toAct);
-    if (v.phase === 'over') { renderEnd(v, pl); fxRun(pl); return; }
+    let pl = fxStep(v, toAct);
+    // the game just ended at the table: the last plays and the Age III battles stay on the table a few seconds with
+    // the winner's seat glowing, then the score sheet (the Catan lesson, Tim 2026-11-25: "it instantly ends")
+    let finale = false;
+    if (v.phase === 'over') {
+      const sc = pl.steps.find(s => s.fx === 'scores');
+      if (sc && $('#game') && ui.tab === 'play') {
+        const t0 = sc.at, ms = FX.settings.animSpeed === 'fast' ? FINALE_FAST : FINALE_MS;
+        const endPl = Object.assign({}, pl, { steps: pl.steps.filter(s => s.fx === 'scores' || s.fx === 'celebrate').map(s => Object.assign({}, s, { at: Math.max(0, s.at - t0) })) });
+        pl = Object.assign({}, pl, { steps: pl.steps.filter(s => s.fx !== 'scores' && s.fx !== 'celebrate') });
+        ui.finale = { pl: endPl, until: Date.now() + ms };
+        clearTimeout(ui.finaleTimer);
+        ui.finaleTimer = setTimeout(() => {
+          const f = ui.finale; ui.finale = null;
+          if (!table || ui.tab !== 'play') return;
+          const ve = table.view();
+          if (ve.phase === 'over') { renderEnd(ve, f.pl); fxRun(f.pl); }
+        }, ms);
+        finale = true;
+      } else if (ui.finale && Date.now() < ui.finale.until && $('#game')) { finale = true; pl = Object.assign({}, pl, { steps: [] }); }
+      else { ui.finale = null; renderEnd(v, pl); fxRun(pl); return; }
+    }
     const me = v.players[ME];
     const L = E.left(v, ME), R = E.right(v, ME);
     const key = v.age + ':' + v.turn + ':' + v.phase + ':' + (v.lhand ? v.lhand.length : '');
@@ -795,6 +816,7 @@
       fanSel = ui.sel;
       actHTML = actPanel(v, opts, ranked);
     } else actHTML = waitHTML(v);
+    if (finale) actHTML = finaleHTML(v);
 
     // seats round the table from your left: left neighbour, the far side, right neighbour
     const farSeats = [];
@@ -822,7 +844,14 @@
       (table.online ? ' Room <b style="color:var(--text)">' + esc(net.snap.code || '') + '</b>' : '') + '</div></div>' +
       '</div>';
     layoutHand(fanSel, dealIn ? pl.handDelay : -1, v.age);
+    if (finale) v.result.winners.forEach(w => vPlay.querySelectorAll('#game .seat[data-city="' + w + '"], #game .me[data-city="' + w + '"]').forEach(el => el.classList.add('won')));
     fxRun(pl);
+  }
+  // the act panel during those seconds: who won, and with how many points
+  function finaleHTML(v) {
+    const R = v.result, w = R.winners;
+    const who = w.indexOf(ME) >= 0 ? (w.length > 1 ? 'Shared win!' : 'You win!') : esc(w.map(x => nameOf(v, x)).join(' & ')) + ' win' + (w.length > 1 ? '' : 's') + '!';
+    return '<div class="finale"><b class="h">' + who + '</b><div class="tx">' + R.scores[w[0]].total + ' points</div></div>';
   }
   // while your coins are about to count up or down, the chip starts from the old number
   function coinStart(pl, now) {

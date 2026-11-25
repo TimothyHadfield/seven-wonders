@@ -111,6 +111,7 @@ Animations off: body class `fx-noanim` stops the CSS deal/pop/sheet animations t
 - Stage boxes are sized in proportion to what they show (cost length + effect).
 - My stats: quitting after your first pick = a loss; hint, Card values or Undo = "with help" (unrated); the guided game and online games are never counted. Daily = 4 players, 1st edition, random sides, 3 Hard computers, no Undo.
 - My stats, Daily and Rules sit in one row under Play online on the setup screen (in the hero they squeezed the title at 320 px).
+- 11-25 (Catan lessons): the end no longer cuts straight to the score sheet. The table stays 4.5 s (2.5 s on fast animations) with the last plays, the Age III battle banner (it never showed before: the table was gone), the winner's seat glowing gold and "X wins! · N points" in the act panel; then the score sheet counts up as before (`ui.finale` in renderGame splits the end plan: table steps now, `scores`/`celebrate` later). Already fine / not applicable: simultaneous picks (no first player), score sheet already shows everything, no page scroll. Score sheet is still a full page (a board-beside-results layout would be a redesign). Verified: full 4-player game through taps in headless WebKit at 393x659 and 1280x720, 0 errors.
 
 ## NOT verified
 - A real iPhone (only Safari's engine at 393px via phone-view).
