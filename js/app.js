@@ -823,7 +823,11 @@
     for (let s = E.left(v, ME); s !== R; s = E.left(v, s)) if (s !== L) farSeats.push(s);
     const all = v.players.map((p, i) => playerRow(v, i, fresh)).join('');
     vPlay.classList.add('ingame');
-    vPlay.innerHTML = '<div id="game" style="--land:' + pl.land + 'ms">' +
+    // fit pass: how deep your tallest colour stack is (3+ = the laptop hand row gives the city more height)
+    const myCols = {};
+    for (const id of me.city) { const c = card(v, id).color; myCols[c] = (myCols[c] || 0) + 1; }
+    const myRows = Math.max(0, (me.lead || []).length, ...Object.values(myCols));
+    vPlay.innerHTML = '<div id="game"' + (myRows >= 3 ? ' data-crowd="' + Math.min(4, myRows) + '"' : '') + ' style="--land:' + pl.land + 'ms">' +
       '<div class="status"><div class="far">' + farSeats.map(s => seatHTML(v, s, null, pr)).join('') + '</div><div class="tools">' +
       '<button class="icon-btn" id="btn-hint" title="Hint" aria-label="Hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></button>' +
       (undoShown() ? '<button class="icon-btn" id="btn-undo" title="Undo your last pick" aria-label="Undo"' + (canUndo() ? '' : ' disabled') + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>' : '') +
@@ -952,6 +956,8 @@
     const step = cards.length > 1 ? parseFloat(cards[1].style.getPropertyValue('--x')) - parseFloat(cards[0].style.getPropertyValue('--x')) : cw;
     if (step < cw * 0.95) f.style.setProperty('--nmr', Math.max(cw * 0.05, cw - step + cw * 0.07).toFixed(1) + 'px');
     else f.style.removeProperty('--nmr');
+    // fit pass: a name that wraps to 3 lines on a small card would run under the price tag ("5¢", "free"): the tag sits on top of the name scroll instead
+    cards.forEach(c => { const nm = c.querySelector('.nm'), st = c.querySelector('.st'); if (!nm || !st) return; st.style.bottom = ''; const need = nm.offsetHeight + cw * 0.05 + 1; if (need > cw * 0.42) st.style.bottom = need.toFixed(1) + 'px'; });
     const was = ui.fanSel;
     ui.fanSel = sel;
     if (was >= 0 && cards[was]) api.select(was, true);

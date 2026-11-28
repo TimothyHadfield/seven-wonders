@@ -32,3 +32,10 @@
 - **Verified:** leaders.test 34/34 (0/34 old), engine 29, study 5, online, fx 14; base fingerprint unchanged; ladder with leaders Hard>Medium>Easy (67/61, 80/77, 96/94%); replay 20/20 identical; WebKit click-through draft→recruit→Age I at 393, 320, 659×393, 1280, 1440 (no errors, no overflow); ui 27, vis 246, pwa 18/18.
 - **Open:** Rome + Leaders guilds; Score calculator leaders row; two-browser online with leaders; edge-check crashes WebKit mid-run (main too).
 - **Sweep (same day, d1606f7):** coach 1.2.0 (offer `place:'auto'`, avoids Deal; landscape `--coach-offer-top: 4px` because the top spot clipped Deal by 4 px; now 0 px over tabs/Deal at 393, 320, 659×393) + pwa 1.4.0 (data-version 13); engine 29, leaders 34, study 5, online 4, fx 14, ui 27, fx-check, edge-check 124/0 (ran through this time), pwa-check 18/18; settings 320 px no sideways scroll; wonder select already dark.
+
+## 2026-11-27 — fit pass (builder from the manager)
+- **Asked:** Tim: "spacing, sizing, and making sure the user can actually see the full screen and everything are a really common problem. Could you go through every game…" Scope: size and space only, no restyle.
+- **Found (measured, WebKit):** phone city stacks 5.3 px per card at 4 deep (2.7 at 320), hand numbers 6.4 px, far names "Al…"; laptop: 9 of your built-card names cut at 4 deep, small effect icons 13 px at 1440.
+- **Built:** phone stacks sized by the deepest colour column; number/name floors on phone-size hand cards; price tag lifts above a tall name; far-seat name gets the plate's width; laptop city names 3 lines + hand row shorter when your city is 3+ deep. tests/fit-ui.mjs, tools/fit-shots.mjs, `crowd7` state in tools/edge-states.js.
+- **Verified:** fit-ui 162/0 (48 failed of 123 on the old build), vis 246/0 (late7t6 floors lowered, see Decisions), ui 27/0, engine 29, leaders 34, study 5, online 4, fx 14; screenshots at 5 sizes looked at.
+- **Open:** real iPhone; whole game clicked through after the change.

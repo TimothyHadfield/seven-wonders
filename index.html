@@ -113,6 +113,12 @@
   .card .top .vp { min-width: calc(var(--cw) * .2); height: calc(var(--cw) * .2); font-size: calc(var(--cw) * .13); padding: 0 2px; }
   .card .top .alt .ic, .card .top .trade .ic, .card .top .per .ic, .card .top .trade .coin, .card .top .per .coin { width: calc(var(--cw) * .13); height: calc(var(--cw) * .13); font-size: calc(var(--cw) * .08); }
   .card .top .per .vp { min-width: calc(var(--cw) * .14); height: calc(var(--cw) * .14); font-size: calc(var(--cw) * .09); }
+  /* fit pass 11-27: numbers on a hand card (coin costs, prices, points) never drop under 12 px on a phone-size card
+     (min(12px, 20% of the card) keeps tiny cards in proportion); laptop cards are big enough already */
+  .card .top .coin { width: max(min(16px, calc(var(--cw) * .27)), calc(var(--cw) * .19)); height: max(min(16px, calc(var(--cw) * .27)), calc(var(--cw) * .19)); font-size: max(min(12px, calc(var(--cw) * .21)), calc(var(--cw) * .11)); }
+  .card .top .vp { height: max(min(17px, calc(var(--cw) * .27)), calc(var(--cw) * .2)); font-size: max(min(12px, calc(var(--cw) * .21)), calc(var(--cw) * .13)); }
+  .card .top .trade .coin, .card .top .per .coin { width: max(min(15px, calc(var(--cw) * .25)), calc(var(--cw) * .13)); height: max(min(15px, calc(var(--cw) * .25)), calc(var(--cw) * .13)); font-size: max(min(12px, calc(var(--cw) * .21)), calc(var(--cw) * .08)); }
+  .card .top .per .vp { height: max(min(15px, calc(var(--cw) * .25)), calc(var(--cw) * .14)); font-size: max(min(12px, calc(var(--cw) * .21)), calc(var(--cw) * .09)); }
   .card .top .alt b, .card .top .per b { color: #fff; }
   .card .top .who { color: #fff; }
   .card .top .cchip { width: calc(var(--cw) * .09); height: calc(var(--cw) * .12); box-shadow: 0 0 0 1px rgba(255,255,255,.7); }
@@ -122,12 +128,17 @@
   .card .cst:empty { display: none; }
   .card .cst .ic.s, .card .cst .coin { width: calc(var(--cw) * .15); height: calc(var(--cw) * .15); font-size: calc(var(--cw) * .1); }
   .card .cst.many .ic.s, .card .cst.many .coin { width: calc(var(--cw) * .12); height: calc(var(--cw) * .12); }
+  .card .cst:has(.coin) { width: max(min(19px, calc(var(--cw) * .3)), calc(var(--cw) * .2)); }
+  .card .cst .coin, .card .cst.many .coin { width: max(min(16px, calc(var(--cw) * .26)), calc(var(--cw) * .15)); height: max(min(16px, calc(var(--cw) * .26)), calc(var(--cw) * .15)); font-size: max(min(12px, calc(var(--cw) * .21)), calc(var(--cw) * .1)); }
   .card .pic { position: absolute; left: calc(var(--cw) * .26); right: calc(var(--cw) * .06); top: calc(var(--cw) * .34); bottom: calc(var(--cw) * .42); width: auto; height: auto; }
   .card .nm { position: absolute; left: calc(var(--cw) * .05); right: calc(var(--cw) * .05); bottom: calc(var(--cw) * .05); min-height: calc(var(--cw) * .3);
     display: flex; align-items: center; justify-content: center; text-align: center; padding: 1px 2px; border-radius: 2px;
     background: linear-gradient(#f8f0dc, #e6d6b2); border: 1px solid rgba(90,60,20,.35); box-shadow: 0 1px 1px rgba(0,0,0,.15);
     font: 800 calc(var(--cw) * .135)/1.02 Georgia, "Times New Roman", serif; color: #2b1f12; overflow-wrap: normal; -webkit-hyphens: manual; hyphens: manual; }
   .card .nm.long { font-size: calc(var(--cw) * .112); letter-spacing: -.1px; }
+  /* fit pass: names stay >= 10 px on a phone-size card */
+  .card .nm { font-size: max(min(10.5px, calc(var(--cw) * .21)), calc(var(--cw) * .135)); }
+  .card .nm.long { font-size: max(min(10px, calc(var(--cw) * .21)), calc(var(--cw) * .112)); }
   .hand .fan > .card:not(:last-child):not(.is-up) .nm { right: var(--nmr, calc(var(--cw) * .05)); }
   .card .ch, .card .fr { font-size: 10.5px; padding: 2px 6px; color: #444; }
   .card.brown { --frame: #8a5a32; --paper: #ecdcc4; } .card.grey { --frame: #7d8292; --paper: #e5e6ea; } .card.blue { --frame: #2f6bbd; --paper: #dce7f6; }
@@ -141,7 +152,7 @@
   .card.dim.sel { filter: saturate(.6) brightness(.9); }
   .card.hint:not(.sel) { outline-color: var(--good); }
   .card .val { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; font-size: calc(var(--cw) * .13); font-weight: 800; text-align: left; padding-left: calc(var(--cw) * .07); background: rgba(15,17,23,.85); line-height: 1.5; }
-  .card .st { position: absolute; left: calc(var(--cw) * .05); bottom: calc(var(--cw) * .42); z-index: 2; font-size: calc(var(--cw) * .12); font-weight: 800; background: #fff; color: #333; border-radius: 3px; padding: 0 2px; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .card .st { position: absolute; left: calc(var(--cw) * .05); bottom: calc(var(--cw) * .42); z-index: 2; font-size: max(min(12px, calc(var(--cw) * .21)), calc(var(--cw) * .12)); font-weight: 800; background: #fff; color: #333; border-radius: 3px; padding: 0 2px; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
   @keyframes deal { from { transform: translateY(24px) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes fanin { from { opacity: 0; } to { opacity: 1; } }
@@ -294,6 +305,13 @@
   @media (max-width: 899px) and (min-height: 501px) {
     .far .seat .wboard { display: none; }
     .far .seat .pips { display: flex; }
+    /* fit pass 11-27: the name gets the plate's whole width (7 players: "Alex…" not "Al…"); the seat-colour dot sits beside the stage strip */
+    .far .seat { display: grid; grid-template-columns: 5px minmax(0, 1fr); column-gap: 3px; row-gap: 2px; align-content: start; }
+    .far .seat .plate { display: contents; }
+    .far .seat .plate .nmx { grid-column: 1 / -1; grid-row: 1; }
+    .far .seat .plate .dot { grid-column: 1; grid-row: 2; width: 5px; height: 5px; align-self: center; }
+    .far .seat .pips { grid-column: 2; grid-row: 2; align-self: center; }
+    .far .seat .r { grid-column: 1 / -1; grid-row: 3; }
     /* two prices (a trading post or marketplace): the price chip takes its own line rather than squeezing its icons away */
     .nb:has(.sells .pr:not(:last-child)) .r { flex-wrap: wrap; row-gap: 2px; }
     .nb:has(.sells .pr:not(:last-child)) .r .sells { flex: none; max-width: 100%; }
@@ -323,7 +341,12 @@
     .me .cempty { display: flex; align-items: center; justify-content: center; flex: 1; align-self: stretch; color: rgba(255,240,215,.42); font-size: 14px; border: 1.5px dashed rgba(255,240,215,.2); border-radius: 12px; }
     .far .seat .fw { display: inline; }
   }
-  .me .citycards { --colh: 46px; --mw: 40px; --mh: 30px; --bh: 13px; flex: 1; }
+  /* fit pass 11-27: the stacks grow with the tallest colour column, so every built card keeps a readable banner
+     (one card = an 18 px strip; 4 deep = 57 px), instead of squeezing 4 cards into 46 px (5 px slivers) */
+  .me .citycards { --bh: 13px; --mw: 40px; --mh: calc(var(--bh) + 5px); --colh: calc(min(var(--rows, 1), 6) * var(--bh) + 5px); flex: 1; }
+  @media (max-width: 899px) {
+    .me .mc .top .alt .ic, .me .mc .top .trade .ic, .me .mc .top .per .ic, .me .mc .top .trade .coin, .me .mc .top .per .coin, .me .mc .top .per .vp { width: calc(var(--bh) * .77); height: calc(var(--bh) * .77); font-size: calc(var(--bh) * .5); }
+  }
   .mine-tok { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
   .mine-tok .tok { font-size: 14px; }
   .mine-tok .tok .ic { width: 18px; height: 18px; }
@@ -448,7 +471,11 @@
     .nbs .seat .mc .top .alt .ic, .nbs .seat .mc .top .trade .ic, .nbs .seat .mc .top .per .ic { width: max(11px, calc(var(--band) * .55)); height: max(11px, calc(var(--band) * .55)); }
     .nbs .seat .mc .mn, .me .mc .mn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding: 1px 2px 0; text-align: center;
       font: 700 clamp(8.5px, calc(var(--mw) * .2), 11.5px)/1.12 system-ui, sans-serif; color: #2a1d0c; overflow-wrap: normal; -webkit-hyphens: manual; hyphens: manual; }
-    .me .mc .mn { -webkit-line-clamp: 2; }
+    /* fit pass 11-27: your own card names never cut ("Chamber of Com…"): up to 3 lines, >= 10 px */
+    .me .mc .mn { -webkit-line-clamp: 3; font-size: clamp(10px, calc(var(--mw) * .18), 11px); line-height: 1.08; position: relative; z-index: 1; background: var(--paper); }
+    /* your city 3+ cards deep (late Ages II-III): the hand row gives the middle row just the height 3-line names need */
+    #game[data-crowd="3"] { --handh: clamp(210px, 34vh, 320px); }
+    #game[data-crowd="4"] { --handh: clamp(200px, 26vh, 300px); }
     /* a card with room below its name (few cards in the column) shows its picture too */
     .nbs .seat .mc .mp, .me .mc .mp { display: block; position: absolute; left: 8%; width: 84%; bottom: 3px; height: auto; }
     .nbs .seat .mc .mp { top: calc(var(--band) + 2.3 * clamp(8.5px, calc(var(--mw) * .2), 11.5px) + 3px); }
@@ -460,7 +487,7 @@
     .nbs .seat .wboard .stg b.arr { font-size: 11px; margin: 0; }
     .me { min-height: 0; }
     .me .mytop { flex: 1; min-height: 0; container-type: size; align-items: flex-end; }
-    .me .citycards { --colh: 100cqh; --mw: min(84px, calc((100cqw - 110px - (var(--cols, 7) - 1) * 6px) / var(--cols, 7))); --band: min(26px, calc(var(--mw) * .32)); --mh: clamp(calc(var(--mw) * .62), calc(100cqh / var(--rows, 1) - 4px), calc(var(--mw) * 1.45));
+    .me .citycards { --colh: 100cqh; --mw: min(84px, calc((100cqw - 110px - (var(--cols, 7) - 1) * 6px) / var(--cols, 7))); --band: clamp(17px, calc(var(--mw) * .3), 26px); --mh: clamp(calc(var(--mw) * .62), calc(100cqh / var(--rows, 1) - 4px), calc(var(--mw) * 1.45));
       --bh: clamp(var(--band), calc((100cqh - var(--mh)) / max(1, var(--rows, 1) - 1)), calc(var(--mh) - 2px)); align-self: stretch; }
     .me .mc .top .ic, .me .mc .top .coin, .me .mc .top .vp { width: calc(var(--band) - 3px); height: calc(var(--band) - 3px); font-size: calc(var(--band) * .5); }
     .far .seat { flex: 0 1 200px; }
@@ -475,7 +502,7 @@
       grid-template-areas: "nb status" "me act" "hand act"; }
     .far { display: none; }
     .act { height: auto; }
-    .me .citycards { --colh: 30px; --mh: 22px; --bh: 10px; }
+    .me .citycards { --bh: 10px; --mh: calc(var(--bh) + 4px); --colh: calc(min(var(--rows, 1), 5) * var(--bh) + 4px); }
     /* the hand needs the height: neighbours lose their last-move line and colour stacks (tap a seat for its city), the centre goes flat */
     #game { gap: 4px; padding: 4px 8px; }
     .nb .srow, .seat .last, .piles .lbl { display: none; }
@@ -505,7 +532,7 @@
   /* short phones (iPhone SE): smaller stacks and no last-move line, so the hand never covers your board */
   @media (max-height: 600px) and (max-width: 559px) {
     .seat .last { display: none; }
-    .me .citycards { --colh: 34px; --mh: 26px; --bh: 11px; }
+    .me .citycards { --bh: 10px; --mh: calc(var(--bh) + 4px); --colh: calc(min(var(--rows, 1), 5) * var(--bh) + 4px); }
     .far .seat .wboard { display: none; }
     .act { height: 124px; gap: 3px; padding: 6px 8px; }
     .act .tx { -webkit-line-clamp: 1; }
@@ -719,7 +746,7 @@
 <script src="js/swprofile.js?v=1"></script>
 <script src="js/coach.js?v=3"></script>
 <script src="js/swcoach.js?v=3"></script>
-<script src="js/pwa.js?v=14" data-version="14"></script>
-<script src="js/app.js?v=14"></script>
+<script src="js/pwa.js?v=15" data-version="15"></script>
+<script src="js/app.js?v=15"></script>
 </body>
 </html>

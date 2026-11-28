@@ -24,6 +24,9 @@ const VP = {
 };
 // floors per size: [hand card width, card name px, smallest cost/effect icon px, wonder stage icon px]. 320 px is height-bound (7 seats, SE height): a regression guard only.
 const FLOOR = { p320: [45, 5, 5.5, 11], p393: [79, 8.8, 8.3, 12], land: [62, 7, 7, 11], land15: [58, 6.5, 6.5, 11], d1280: [140, 15, 15, 16], d1440: [145, 15, 15, 16] };
+// fit pass 2026-11-27: late7t6 = Age III turn 6, your city 4 cards deep, 2 cards left in hand. The city now takes the height
+// every built card's banner + name needs (phone 5 px slivers -> 13 px; laptop names no longer cut), so the 2-card hand is a bit smaller.
+const FLOOR_T6 = { p393: [70, 8.8, 8.3, 12], d1280: [110, 12, 14, 16], d1440: [125, 14, 14, 16] };
 const measure = () => {
   const qa = s => Array.from(document.querySelectorAll(s)).filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && getComputedStyle(e).display !== 'none'; });
   const minsz = s => { const r = qa(s).map(e => e.getBoundingClientRect()); return r.length ? Math.min(...r.map(x => Math.min(x.width, x.height))) : null; };
@@ -70,7 +73,7 @@ for (const [st, local] of [['late7', S.age3_7], ['mid4', S.mid4], ['late7t6', S.
     await p.waitForTimeout(800);
     const m = await p.evaluate(measure);
     if (SHOTS) await p.screenshot({ path: join(SHOTS, st + '-' + vp + '.png') });
-    const [fw, fnm, fic, fstg] = FLOOR[vp];
+    const [fw, fnm, fic, fstg] = (st === 'late7t6' && FLOOR_T6[vp]) || FLOOR[vp];
     const tag = st + ' ' + vp + ': ';
     ok(tag + 'hand cards at least ' + fw + ' px wide', m.cw >= fw, m.cw);
     ok(tag + 'card names at least ' + fnm + ' px', m.nm >= fnm, m.nm);

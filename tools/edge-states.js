@@ -78,6 +78,11 @@ out.side = wrap(E.newGame({ ed: 2, n: 5, names: ['You', 'Computer 1', 'Computer 
   const t7 = JSON.parse(JSON.stringify(JSON.parse(out.age3_7).game.state));
   t7.players.forEach((p, i) => { if (i) p.name = 'WWWWWWWWWWWWWWWWWWWWWWW' + i; });
   out.names7 = wrap(t7);
+  // crowded: 7 players, Age III turn 6 (you have ~15 built cards), long names
+  const c7 = JSON.parse(JSON.stringify(JSON.parse(out.age3t6_7).game.state));
+  const long = ['Bartholomew-Maximilian', 'Alexandrina Rose', 'Computer Eleanor', 'Maximiliano Jr', 'Wilhelmina Grace', 'Christopher Lee'];
+  c7.players.forEach((p, i) => { if (i) p.name = long[i - 1]; });
+  out.crowd7 = wrap(c7);
 }
 return out;
 };
